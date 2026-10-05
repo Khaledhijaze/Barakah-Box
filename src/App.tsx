@@ -15,17 +15,20 @@ import { ImpactReport } from './components/ImpactReport';
 import { WalletTopupModal } from './components/WalletTopupModal';
 import { PayoutModal } from './components/PayoutModal';
 import { AuthPortal } from './components/AuthPortal';
+import { DevTools } from './components/DevTools';
 import { Toast, ToastMessage } from './components/Toast';
-import { INITIAL_ORDERS, INITIAL_DISPUTES, INITIAL_COMMISSIONS, INITIAL_AUDIT_LOGS, INITIAL_REWARD_RULES } from './data/mockData';
+import { INITIAL_BOXES, INITIAL_ORDERS, INITIAL_DISPUTES, INITIAL_COMMISSIONS, INITIAL_AUDIT_LOGS, INITIAL_REWARD_RULES } from './data/mockData';
 import { resolveLocationFromCoords } from './data/geographyData';
 import { t as translations } from './data/translations';
 import { executeSecurePayout } from './db/supabaseClient';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('ar');
   const [currentAccount, setCurrentAccount] = useState<AccountType>('consumer');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authRole, setAuthRole] = useState<AccountType | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('marketplace-catalog');
 
   // GLOBAL GPS & AUTO-LOCATION STATE (Unified for Rescuer)
@@ -242,12 +245,130 @@ export default function App() {
     setIsLoggedIn(true);
     setAuthRole(role);
     setCurrentAccount(role);
+    setIsAuthModalOpen(false);
     if (role === 'consumer') setCurrentScreen('marketplace-catalog');
     if (role === 'merchant') setCurrentScreen('merchant-dashboard');
     if (role === 'admin') setCurrentScreen('platform-admin');
     
     showToast(isEn ? 'Logged in successfully!' : 'تم تسجيل الدخول بنجاح!', 'verified', 'success');
   };
+
+  // E2E TESTING SUITE HANDLERS
+  const handleSeedData = () => {
+    const extraOrders: OrderItem[] = [
+      { 
+        id: 'SEED-001', 
+        customerName: 'كمال الشامي', 
+        customerPhone: '0933112233',
+        governorate: 'دمشق',
+        cityArea: 'الشعلان',
+        deliveryAddress: 'شارع المتنبي - بناء 4',
+        storeName: 'مخبز الشامي',
+        storePhone: '011-223344',
+        boxTitle: 'سلة فواكه طازجة', 
+        orderType: 'delivery',
+        price: 25000, 
+        status: 'pending', 
+        paymentMethod: 'شام كاش', 
+        merchantNet: 21250, 
+        orderPlacedAt: 'اليوم، 12:00 م',
+        pickupWindow: '4:00 م - 6:00 م',
+        financialSplit: {
+          totalCustomerPaid: 25000,
+          merchantShare: 21250,
+          driverShare: 0,
+          platformOperationalFee: 3750,
+          currency: 'ل.س'
+        },
+        lifecycle: []
+      },
+      { 
+        id: 'SEED-002', 
+        customerName: 'سارة يوسف', 
+        customerPhone: '0944887766',
+        governorate: 'دمشق',
+        cityArea: 'المهاجرين',
+        deliveryAddress: 'الجسر الأبيض - بناء 12',
+        storeName: 'مطعم البركة',
+        storePhone: '011-554433',
+        boxTitle: 'وجبة عشاء عائلية', 
+        orderType: 'pickup',
+        price: 45000, 
+        status: 'pending', 
+        paymentMethod: 'بطاقة بنكية', 
+        merchantNet: 38250, 
+        orderPlacedAt: 'اليوم، 1:30 م',
+        pickupWindow: '8:00 م - 10:00 م',
+        financialSplit: {
+          totalCustomerPaid: 45000,
+          merchantShare: 38250,
+          driverShare: 0,
+          platformOperationalFee: 6750,
+          currency: 'ل.س'
+        },
+        lifecycle: []
+      },
+    ];
+    setOrders(prev => [...extraOrders, ...prev]);
+    showToast(isEn ? 'Demo data seeded: +2 Stores/Orders' : 'تم إدخال بيانات تجريبية: +2 متاجر وطلبات', 'database', 'success');
+  };
+
+  const handleDevTopup = (amt: number) => {
+    setWalletBalance(prev => prev + amt);
+    showToast(isEn ? `Added ${amt.toLocaleString()} SYP for testing` : `تمت إضافة ${amt.toLocaleString()} ل.س رصيد تجريبي`, 'payments', 'success');
+  };
+
+  const handleSimulateLifecycle = () => {
+    showToast(isEn ? 'Simulating order lifecycle...' : 'بدء محاكاة دورة حياة الطلب...', 'published_with_changes', 'info');
+    
+    // 1. Create a "Booked" order
+    const simId = `SIM-${Math.floor(1000 + Math.random() * 9000)}`;
+    const simOrder: OrderItem = {
+      id: simId,
+      customerName: 'فادي علي (تجريبي)',
+      customerPhone: '0955443322',
+      governorate: 'دمشق',
+      cityArea: 'المزة',
+      deliveryAddress: 'فيلات غربية - بناء 8',
+      storeName: 'حلويات دمشق',
+      storePhone: '011-887766',
+      boxTitle: 'سلة حلويات شامية مشكلة',
+      orderType: 'delivery',
+      price: 15000,
+      status: 'pending',
+      paymentMethod: 'شام كاش',
+      merchantNet: 12750,
+      driverFee: 4000,
+      orderPlacedAt: 'الآن',
+      pickupWindow: 'الليلة 9:00 م',
+      financialSplit: {
+        totalCustomerPaid: 19000,
+        merchantShare: 12750,
+        driverShare: 4000,
+        platformOperationalFee: 2250,
+        currency: 'ل.س'
+      },
+      lifecycle: []
+    };
+    
+    setOrders(prev => [simOrder, ...prev]);
+    handleDeductWallet(19000);
+    
+    // 2. Wait and simulate "In Transit"
+    setTimeout(() => {
+      setOrders(prev => prev.map(o => o.id === simId ? { ...o, status: 'in_transit' } : o));
+      showToast(isEn ? `Order ${simId}: Captain Picked Up` : `الطلب ${simId}: الكابتن استلم السلة`, 'two_wheeler', 'info');
+      
+      // 3. Wait and simulate "Delivered"
+      setTimeout(() => {
+        setOrders(prev => prev.map(o => o.id === simId ? { ...o, status: 'delivered' } : o));
+        handleUpdateMerchantWallet(12750);
+        handleUpdateDriverWallet(4000);
+        showToast(isEn ? `Order ${simId}: Successfully Delivered!` : `الطلب ${simId}: تم التسليم بنجاح!`, 'verified', 'success');
+      }, 3000);
+    }, 2000);
+  };
+
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -277,6 +398,7 @@ export default function App() {
         onToggleLanguage={handleToggleLanguage}
         isLoggedIn={isLoggedIn}
         onLogout={handleLogout}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -501,6 +623,44 @@ export default function App() {
 
       {/* Toast Notification Container */}
       <Toast toast={toast} onClose={() => setToast(null)} />
+
+      {/* Dev Tools Sidebar */}
+      <DevTools 
+        onSeedData={handleSeedData}
+        onTopupWallet={handleDevTopup}
+        onSimulateLifecycle={handleSimulateLifecycle}
+        lang={lang}
+      />
+
+      {/* Auth Modal Overlay */}
+      <AnimatePresence>
+        {isAuthModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md"
+            >
+              <button
+                onClick={() => setIsAuthModalOpen(false)}
+                className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/20 hover:bg-white/40 text-white rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+              <AuthPortal 
+                onLoginSuccess={handleLoginSuccess}
+                lang={lang}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

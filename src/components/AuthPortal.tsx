@@ -26,7 +26,8 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
   const [storeName, setStoreName] = useState('');
   const [storeCategory, setStoreCategory] = useState<'produce' | 'grocery' | 'bakeries' | 'restaurants' | 'sweets'>('bakeries');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [step, setStep] = useState<'input' | 'otp'>(mode === 'consumer' ? 'input' : 'input');
+  const [adminCode, setAdminCode] = useState('');
+  const [step, setStep] = useState<'input' | 'otp' | 'admin_code'>(mode === 'consumer' ? 'input' : 'input');
 
   const categories = [
     { id: 'produce', ar: 'خضار وفواكه', en: 'Fruits & Veggies', icon: 'eco' },
@@ -53,6 +54,11 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
   const handlePartnerLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === 'admin' && step !== 'admin_code') {
+      setStep('admin_code');
+      return;
+    }
+    
     setIsVerifying(true);
     setTimeout(() => {
       onLoginSuccess(mode === 'partner' ? 'merchant' : 'admin');
@@ -60,15 +66,28 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
     }, 1200);
   };
 
+  const handleAdminVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminCode === '9921') { // Mock secure code
+      setIsVerifying(true);
+      setTimeout(() => {
+        onLoginSuccess('admin');
+        setIsVerifying(false);
+      }, 1200);
+    } else {
+      alert(isEn ? 'Invalid Admin Code!' : 'رمز الأمان غير صحيح!');
+    }
+  };
+
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
         className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden border border-slate-200"
       >
         {/* Header */}
-        <div className="bg-[#006948] p-8 text-white text-center">
+        <div className="bg-[#006948] p-8 text-white text-center relative">
           <div className="w-20 h-20 bg-white/20 rounded-[24px] flex items-center justify-center mx-auto mb-4 border border-white/20">
             <span className="material-symbols-outlined text-[40px] text-[#85f8c4]">
               {mode === 'consumer' ? 'person' : mode === 'partner' ? 'store' : 'admin_panel_settings'}
@@ -178,6 +197,44 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 </motion.form>
               )}
             </AnimatePresence>
+          ) : step === 'admin_code' ? (
+            <form onSubmit={handleAdminVerify} className="space-y-5 animate-in fade-in slide-in-from-bottom-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 mb-1.5 block uppercase tracking-wider">
+                  {isEn ? 'Admin Security Code' : 'رمز الأمان الخاص بالإدارة'}
+                </label>
+                <input
+                  type="password"
+                  value={adminCode}
+                  onChange={(e) => setAdminCode(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-center text-xl font-black tracking-widest text-[#006948] focus:ring-4 focus:ring-[#006948]/10 focus:border-[#006948] outline-none transition-all"
+                  placeholder="••••"
+                  maxLength={4}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isVerifying}
+                className="w-full bg-[#006948] hover:bg-[#00855d] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isVerifying ? (
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined">security</span>
+                    <span>{isEn ? 'Verify & Enter Operations Room' : 'تحقق ودخول غرفة العمليات'}</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('input')}
+                className="w-full text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                {isEn ? 'Cancel' : 'إلغاء'}
+              </button>
+            </form>
           ) : (
             <form onSubmit={handlePartnerLogin} className="space-y-5">
               {authAction === 'register' && mode === 'partner' && (

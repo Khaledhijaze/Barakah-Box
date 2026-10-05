@@ -18,6 +18,7 @@ interface NavbarProps {
   onToggleLanguage: () => void;
   isLoggedIn: boolean;
   onLogout: () => void;
+  onOpenAuth: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -34,6 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleLanguage,
   isLoggedIn,
   onLogout,
+  onOpenAuth,
 }) => {
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
 
@@ -170,7 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* User Profile Avatar / Logout */}
           <div className="flex items-center gap-2">
-            {isLoggedIn && (
+            {isLoggedIn ? (
               <button
                 onClick={onLogout}
                 className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center cursor-pointer"
@@ -178,8 +180,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
               </button>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                className="w-8 h-8 rounded-full bg-slate-100 text-[#006948] hover:bg-[#006948] hover:text-white transition-all flex items-center justify-center cursor-pointer shadow-sm group"
+                title={isEn ? 'Login / Register' : 'تسجيل الدخول / إنشاء حساب'}
+              >
+                <span className="material-symbols-outlined text-[20px] group-active:scale-90 transition-transform">login</span>
+              </button>
             )}
-            <div className="w-8 h-8 rounded-full bg-[#006948] text-white flex items-center justify-center shrink-0 font-bold text-xs shadow-sm">
+            <div 
+              onClick={isLoggedIn ? undefined : onOpenAuth}
+              className={`w-8 h-8 rounded-full bg-[#006948] text-white flex items-center justify-center shrink-0 font-bold text-xs shadow-sm ${isLoggedIn ? '' : 'cursor-pointer hover:bg-[#00855d] transition-colors'}`}
+            >
               <span className="material-symbols-outlined text-[18px]">person</span>
             </div>
           </div>
