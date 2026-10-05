@@ -14,6 +14,7 @@ import { LiveNavigation } from './components/LiveNavigation';
 import { ImpactReport } from './components/ImpactReport';
 import { WalletTopupModal } from './components/WalletTopupModal';
 import { PayoutModal } from './components/PayoutModal';
+import { AuthPortal } from './components/AuthPortal';
 import { Toast, ToastMessage } from './components/Toast';
 import { INITIAL_ORDERS, INITIAL_DISPUTES, INITIAL_COMMISSIONS, INITIAL_AUDIT_LOGS, INITIAL_REWARD_RULES } from './data/mockData';
 import { resolveLocationFromCoords } from './data/geographyData';
@@ -23,6 +24,8 @@ import { executeSecurePayout } from './db/supabaseClient';
 export default function App() {
   const [lang, setLang] = useState<Language>('ar');
   const [currentAccount, setCurrentAccount] = useState<AccountType>('consumer');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authRole, setAuthRole] = useState<AccountType | null>(null);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('marketplace-catalog');
 
   // GLOBAL GPS & AUTO-LOCATION STATE (Unified for Rescuer)
@@ -202,6 +205,13 @@ export default function App() {
   };
 
   const handleAccountChange = (acc: AccountType) => {
+    // Role Isolation: Force login if not logged in AS that specific role
+    if (acc !== 'consumer' && (!isLoggedIn || authRole !== acc)) {
+      setCurrentAccount(acc);
+      // We don't change screen yet, AuthPortal will be shown by main logic
+      return;
+    }
+    
     setCurrentAccount(acc);
     // Reset secondary screen
     if (acc === 'consumer') setCurrentScreen('marketplace-catalog');
@@ -228,6 +238,25 @@ export default function App() {
     showToast(isEn ? `Switched to: ${label}` : `تم التبديل إلى: ${label}`, 'login');
   };
 
+  const handleLoginSuccess = (role: AccountType) => {
+    setIsLoggedIn(true);
+    setAuthRole(role);
+    setCurrentAccount(role);
+    if (role === 'consumer') setCurrentScreen('marketplace-catalog');
+    if (role === 'merchant') setCurrentScreen('merchant-dashboard');
+    if (role === 'admin') setCurrentScreen('platform-admin');
+    
+    showToast(isEn ? 'Logged in successfully!' : 'تم تسجيل الدخول بنجاح!', 'verified', 'success');
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setAuthRole(null);
+    setCurrentAccount('consumer');
+    setCurrentScreen('marketplace-catalog');
+    showToast(isEn ? 'Logged out' : 'تم تسجيل الخروج', 'logout', 'info');
+  };
+
   return (
     <div
       dir={isEn ? 'ltr' : 'rtl'}
@@ -246,11 +275,22 @@ export default function App() {
         onAutoDetectLocation={handleAutoDetectLocation}
         lang={lang}
         onToggleLanguage={handleToggleLanguage}
+        isLoggedIn={isLoggedIn}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 pt-28 pb-12 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Support Screens Check */}
+        {/* Auth Check for Restricted Portals: Partners, Admins, and Captains must be logged in with correct role */}
+        {((currentAccount === 'merchant' || currentAccount === 'admin' || currentAccount === 'driver') && (!isLoggedIn || authRole !== currentAccount)) ? (
+          <AuthPortal 
+            onLoginSuccess={handleLoginSuccess} 
+            lang={lang} 
+            defaultMode={currentAccount === 'admin' ? 'admin' : currentAccount === 'merchant' ? 'partner' : 'consumer'} 
+          />
+        ) : (
+          <>
+            {/* Support Screens Check */}
         {currentScreen === 'live-navigation' ? (
           <div className="flex flex-col gap-4">
             <button
@@ -350,7 +390,9 @@ export default function App() {
             )}
           </>
         )}
-      </main>
+      </>
+    )}
+  </main>
 
       {/* Platform Universal Footer with subtle Captain & Admin Access Entry */}
       <footer className="mt-auto bg-white border-t border-slate-200/80 py-8 px-4 sm:px-6 lg:px-8">
@@ -384,7 +426,7 @@ export default function App() {
                 currentAccount === 'merchant' ? 'text-[#006948] font-bold' : ''
               }`}
             >
-              {isEn ? 'Partner Portal' : 'بوابة الشريك'}
+              {isEn ? 'Partner Dashboard' : 'بوابة الشريك الشامي'}
             </button>
 
             {/* Subtle Driver Portal Entry as requested */}
@@ -409,7 +451,7 @@ export default function App() {
                 currentAccount === 'admin' ? 'text-slate-900 font-bold' : 'text-slate-400'
               }`}
             >
-              {isEn ? 'Central Admin' : 'الإدارة المركزية'}
+              {isEn ? 'Platform Governance' : 'بوابة الإدارة والرقابة'}
             </button>
           </div>
         </div>

@@ -8,8 +8,7 @@ export type AppScreen =
   | 'driver-portal'
   | 'platform-admin'
   | 'live-navigation'
-  | 'impact-report'
-  | 'google-drive-hub';
+  | 'impact-report';
 
 export type SyrianGovernorate =
   | 'الكل'
@@ -27,7 +26,7 @@ export interface BarakahBox {
   id: string;
   vendor: string;
   vendor_en?: string;
-  vendorCategory: 'bakeries' | 'restaurants' | 'produce' | 'grocery';
+  vendorCategory: 'bakeries' | 'restaurants' | 'produce' | 'grocery' | 'sweets';
   categoryLabel: string;
   categoryLabel_en?: string;
   title: string;

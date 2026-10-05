@@ -16,6 +16,8 @@ interface NavbarProps {
   onAutoDetectLocation: () => void;
   lang: Language;
   onToggleLanguage: () => void;
+  isLoggedIn: boolean;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +32,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onAutoDetectLocation,
   lang,
   onToggleLanguage,
+  isLoggedIn,
+  onLogout,
 }) => {
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
 
@@ -63,47 +67,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* ROLE-BASED NAVIGATION: Consumer, Merchant, and Admin shown for clarity in this Remix */}
-        <div className="flex items-center bg-[#eaedff] p-1 rounded-2xl border border-slate-200 shadow-inner">
-          <button
-            onClick={() => onChangeAccount('consumer')}
-            className={`px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              currentAccount === 'consumer'
-                ? 'bg-[#006948] text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[17px]">person</span>
-            <span className="hidden sm:inline">{tr.rescuerLabel}</span>
-          </button>
-
-          <button
-            onClick={() => onChangeAccount('merchant')}
-            className={`px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              currentAccount === 'merchant'
-                ? 'bg-[#006948] text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[17px]">store</span>
-            <span className="hidden sm:inline">{tr.partnerLabel}</span>
-          </button>
-
-          <button
-            onClick={() => onChangeAccount('admin')}
-            className={`px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              currentAccount === 'admin'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[17px]">admin_panel_settings</span>
-            <span className="hidden sm:inline">{isEn ? 'Admin' : 'الإدارة'}</span>
-          </button>
-
-          {/* Active indicator only when Driver Portal is engaged */}
+        {/* ROLE-BASED NAVIGATION HIDDEN FOR PRIVACY (Role Isolation) */}
+        <div className="flex items-center gap-3">
           {currentAccount === 'driver' && (
-            <div className="flex items-center gap-1.5 bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs ml-1">
+            <div className="flex items-center gap-1.5 bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs">
               <span className="material-symbols-outlined text-[16px]">two_wheeler</span>
               <span>{isEn ? 'Captain' : 'الكابتن'}</span>
               <button
@@ -201,9 +168,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* User Profile Avatar */}
-          <div className="w-8 h-8 rounded-full bg-[#006948] text-white flex items-center justify-center shrink-0 font-bold text-xs shadow-sm">
-            <span className="material-symbols-outlined text-[18px]">person</span>
+          {/* User Profile Avatar / Logout */}
+          <div className="flex items-center gap-2">
+            {isLoggedIn && (
+              <button
+                onClick={onLogout}
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center cursor-pointer"
+                title={isEn ? 'Logout' : 'تسجيل الخروج'}
+              >
+                <span className="material-symbols-outlined text-[18px]">logout</span>
+              </button>
+            )}
+            <div className="w-8 h-8 rounded-full bg-[#006948] text-white flex items-center justify-center shrink-0 font-bold text-xs shadow-sm">
+              <span className="material-symbols-outlined text-[18px]">person</span>
+            </div>
           </div>
         </div>
       </div>

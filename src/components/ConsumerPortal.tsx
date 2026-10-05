@@ -562,10 +562,11 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 text-xs font-semibold">
             {[
               { id: 'all', label: tr.allBoxes, icon: 'lunch_dining' },
-              { id: 'bakeries', label: tr.bakeries, icon: 'bakery_dining' },
-              { id: 'restaurants', label: tr.restaurants, icon: 'restaurant' },
-              { id: 'produce', label: tr.produce, icon: 'eco' },
-              { id: 'grocery', label: tr.grocery, icon: 'local_grocery_store' },
+              { id: 'produce', label: isEn ? 'Fruits & Veggies' : 'خضار وفواكه', icon: 'eco' },
+              { id: 'grocery', label: isEn ? 'Grocery' : 'بقالة ومواد غذائية', icon: 'shopping_basket' },
+              { id: 'bakeries', label: isEn ? 'Bakeries' : 'مخابز', icon: 'bakery_dining' },
+              { id: 'restaurants', label: isEn ? 'Restaurants' : 'مطاعم', icon: 'restaurant' },
+              { id: 'sweets', label: tr.sweets, icon: 'icecream' },
             ].map((cat) => (
               <button
                 key={cat.id}

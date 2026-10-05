@@ -371,10 +371,11 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
               >
-                <option>مخبوزات ومعجنات مشكلة</option>
-                <option>حلويات شرقية وشامية</option>
-                <option>وجبات مطبوخة ومشاوي</option>
-                <option>ألبان وأجبان طازجة</option>
+                <option value="bakeries">{isEn ? 'Bakeries' : 'مخابز ومعجنات'}</option>
+                <option value="sweets">{isEn ? 'Sweets' : 'حلويات شرقية وشامية'}</option>
+                <option value="restaurants">{isEn ? 'Restaurants' : 'وجبات مطبوخة ومشاوي'}</option>
+                <option value="grocery">{isEn ? 'Grocery' : 'بقالة وألبان وأجبان'}</option>
+                <option value="produce">{isEn ? 'Fruits & Veggies' : 'خضار وفواكه طازجة'}</option>
               </select>
             </div>
 
