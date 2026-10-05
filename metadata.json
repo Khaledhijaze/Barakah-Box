@@ -1,0 +1,8 @@
+{
+  "name": "Remix صندوق بركة | Barakah Box",
+  "description": "منصة رائدة لتصريف فوائض الأطعمة الطازجة، محاربة الهدر، تسويات الكباتن اللحظية وإدارة سلاسل الإمداد وحفظ النعمة في دمشق.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
