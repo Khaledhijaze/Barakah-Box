@@ -345,6 +345,50 @@ export async function saveRewardRuleToDb(rule: RewardRule): Promise<boolean> {
 }
 
 /**
+ * Upload a file to Supabase Storage bucket
+ */
+export async function uploadFileToSupabase(
+  file: File | Blob,
+  bucket: string,
+  path: string
+): Promise<{ publicUrl: string | null; error: string | null }> {
+  try {
+    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Supabase configuration missing');
+    }
+
+    // 1. Upload the file
+    // Note: path should include the filename, e.g., "proofs/order-123.jpg"
+    const uploadRes = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${path}`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        // Note: For binary uploads, content-type is usually handled by the body if it's a File/Blob
+      },
+      body: file,
+    });
+
+    if (!uploadRes.ok) {
+      const errData = await uploadRes.json();
+      throw new Error(errData.message || 'Upload failed');
+    }
+
+    // 2. Construct the public URL
+    // Public URL format: [supabaseUrl]/storage/v1/object/public/[bucket]/[path]
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
+
+    return { publicUrl, error: null };
+  } catch (err: any) {
+    console.error('Supabase Storage Upload Error:', err);
+    return { publicUrl: null, error: err.message };
+  }
+}
+
+/**
  * Issue custom manual bonus credit to loyal consumer
  */
 export async function issueManualBonusCreditToDb(

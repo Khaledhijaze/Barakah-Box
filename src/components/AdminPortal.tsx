@@ -944,6 +944,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <td className="py-3 px-4">
                       <span className="font-bold block">{p.name}</span>
                       <span className="text-[10px] text-slate-400">المفوض: {p.owner}</span>
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-[#006948] font-bold cursor-pointer hover:underline">
+                        <span className="material-symbols-outlined text-[14px]">description</span>
+                        <span>عرض وثائق المتجر الموثقة</span>
+                      </div>
                     </td>
                     <td className="py-3 px-4">{p.gov}</td>
                     <td className="py-3 px-4">{p.phone}</td>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Language, AccountType, UserProfile } from '../types';
 import { t } from '../data/translations';
 import { motion, AnimatePresence } from 'framer-motion';
+import { uploadFileToSupabase } from '../db/supabaseClient';
 
 interface AuthPortalProps {
   onLoginSuccess: (profile: UserProfile) => void;
@@ -31,6 +32,8 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
   const [storeCategory, setStoreCategory] = useState<'produce' | 'grocery' | 'bakeries' | 'restaurants' | 'sweets'>('bakeries');
   const [adminCode, setAdminCode] = useState('');
   const [gpsLocation, setGpsLocation] = useState<{lat: number, lng: number} | undefined>(undefined);
+  const [storeDocUrl, setStoreDocUrl] = useState<string | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -64,6 +67,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         storeName: mode === 'partner' ? storeName : undefined,
         storeCategory: mode === 'partner' ? storeCategory : undefined,
         licenseNumber: mode === 'partner' ? `SY-LIC-${Math.floor(Math.random() * 9000 + 1000)}` : undefined,
+        licenseUrl: storeDocUrl || undefined,
         location: gpsLocation ? { lat: gpsLocation.lat, lng: gpsLocation.lng, address: isEn ? 'Verified via GPS' : 'تم التوثيق عبر GPS' } : undefined
       };
 
@@ -183,30 +187,67 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 />
               </div>
               
-              {authType === 'signup' && (
-                <div>
-                   <label className="text-[10px] font-bold text-slate-500 mb-2 block uppercase tracking-wider">
-                    {isEn ? 'Store Location (GPS)' : 'موقع المتجر (GPS)'}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if ('geolocation' in navigator) {
-                        navigator.geolocation.getCurrentPosition((pos) => {
-                          setGpsLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                          alert(isEn ? 'Location Pinned Successfully!' : 'تم تثبيت موقع المتجر بنجاح!');
-                        });
-                      }
-                    } }
-                    className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 transition-all font-bold text-xs ${gpsLocation ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-[#006948]'}`}
-                  >
-                    <span className="material-symbols-outlined">{gpsLocation ? 'location_on' : 'add_location_alt'}</span>
-                    {gpsLocation ? (isEn ? 'GPS Location Locked' : 'تم قفل الموقع الجغرافي') : (isEn ? 'Pin Store on Map (GPS)' : 'تحديد موقع المتجر على الخريطة')}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+                {authType === 'signup' && (
+                  <>
+                    <div>
+                       <label className="text-[10px] font-bold text-slate-500 mb-2 block uppercase tracking-wider">
+                        {isEn ? 'Store Location (GPS)' : 'موقع المتجر (GPS)'}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if ('geolocation' in navigator) {
+                            navigator.geolocation.getCurrentPosition((pos) => {
+                              setGpsLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                              alert(isEn ? 'Location Pinned Successfully!' : 'تم تثبيت موقع المتجر بنجاح!');
+                            });
+                          }
+                        } }
+                        className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 transition-all font-bold text-xs ${gpsLocation ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-[#006948]'}`}
+                      >
+                        <span className="material-symbols-outlined">{gpsLocation ? 'location_on' : 'add_location_alt'}</span>
+                        {gpsLocation ? (isEn ? 'GPS Location Locked' : 'تم قفل الموقع الجغرافي') : (isEn ? 'Pin Store on Map (GPS)' : 'تحديد موقع المتجر على الخريطة')}
+                      </button>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="text-[10px] font-bold text-slate-500 mb-2 block uppercase tracking-wider">
+                        {isEn ? 'Store Business Documents / License' : 'وثائق المتجر / السجل التجاري'}
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="file"
+                          className="hidden"
+                          id="store-doc-upload"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setIsUploadingDoc(true);
+                            const { publicUrl, error } = await uploadFileToSupabase(file, 'proofs', `docs/${Date.now()}-${file.name}`);
+                            setIsUploadingDoc(false);
+                            if (publicUrl) setStoreDocUrl(publicUrl);
+                            else if (error) alert(error);
+                          }}
+                        />
+                        <label
+                          htmlFor="store-doc-upload"
+                          className={`flex-1 py-3 px-4 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all font-bold text-xs cursor-pointer ${storeDocUrl ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-[#006948]'}`}
+                        >
+                          {isUploadingDoc ? (
+                            <span className="w-5 h-5 border-2 border-[#006948]/30 border-t-[#006948] rounded-full animate-spin"></span>
+                          ) : (
+                            <>
+                              <span className="material-symbols-outlined">{storeDocUrl ? 'task' : 'upload_file'}</span>
+                              <span>{storeDocUrl ? (isEn ? 'Document Uploaded' : 'تم رفع الوثيقة') : (isEn ? 'Upload License (PDF/Image)' : 'رفع صورة السجل التجاري')}</span>
+                            </>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
           {/* Store Category (Partner SignUp only) */}
           {authType === 'signup' && mode === 'partner' && (

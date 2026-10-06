@@ -6,7 +6,7 @@ import { AIAssistantChat } from './AIAssistantChat';
 import { OrderHelpModal } from './OrderHelpModal';
 import { SYRIAN_GOVERNORATES, SYRIAN_DISTRICTS, calculateDistanceKm, GovernorateItem, DistrictItem } from '../data/geographyData';
 import { t } from '../data/translations';
-import { fetchGovernoratesFromDb, fetchDistrictsFromDb, executeSupabaseInstantRefund, persistSupportTicketToDb } from '../db/supabaseClient';
+import { fetchGovernoratesFromDb, fetchDistrictsFromDb, executeSupabaseInstantRefund, persistSupportTicketToDb, uploadFileToSupabase } from '../db/supabaseClient';
 
 interface ConsumerPortalProps {
   walletBalance: number;
@@ -128,6 +128,29 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
 
   // Active reservation voucher
   const [proofPhoto, setProofPhoto] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleCapturePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const fileName = `proofs/${activeOrderVoucher.orderId}-${Date.now()}.jpg`;
+    const { publicUrl, error } = await uploadFileToSupabase(file, 'proofs', fileName);
+    setIsUploading(false);
+
+    if (error) {
+      onShowToast(isEn ? 'Upload failed: ' + error : 'فشل الرفع: ' + error, 'error', 'error');
+      return;
+    }
+
+    if (publicUrl) {
+      setProofPhoto(publicUrl);
+      onShowToast(isEn ? 'Photo Proof Captured!' : 'تم التقاط صورة إثبات الاستلام!', 'photo_camera', 'success');
+    }
+  };
+
   const [activeOrderVoucher, setActiveOrderVoucher] = useState({
     orderId: '#BB-9048',
     vendor: 'مخبز وشمسين للشامي الأصيل',
@@ -713,6 +736,14 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
 
               {/* Proof of Delivery Photo Upload/Capture */}
               <div className="bg-white p-4 rounded-3xl border-2 border-dashed border-[#006948]/20 text-center shadow-sm w-full md:w-64 relative group">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleCapturePhoto}
+                />
                 {proofPhoto ? (
                   <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-50 border border-slate-200">
                     <img src={proofPhoto} alt="Delivery Proof" className="w-full h-full object-cover" />
@@ -725,17 +756,20 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
                   </div>
                 ) : (
                   <button 
-                    onClick={() => {
-                      // Simulate photo capture
-                      setProofPhoto('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800');
-                      onShowToast(isEn ? 'Photo Proof Captured!' : 'تم التقاط صورة إثبات الاستلام!', 'photo_camera', 'success');
-                    }}
-                    className="w-full aspect-square bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-emerald-50 transition-all border border-slate-200 cursor-pointer group"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="w-full aspect-square bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-emerald-50 transition-all border border-slate-200 cursor-pointer group disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-[40px] text-slate-400 group-hover:text-[#006948]">add_a_photo</span>
-                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-[#006948]">
-                      {isEn ? 'Snap Proof Photo' : 'التقاط صورة إثبات الاستلام'}
-                    </span>
+                    {isUploading ? (
+                      <span className="w-10 h-10 border-4 border-[#006948]/30 border-t-[#006948] rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[40px] text-slate-400 group-hover:text-[#006948]">add_a_photo</span>
+                        <span className="text-[10px] font-bold text-slate-500 group-hover:text-[#006948]">
+                          {isEn ? 'Snap Proof Photo' : 'التقاط صورة إثبات الاستلام'}
+                        </span>
+                      </>
+                    )}
                   </button>
                 )}
               </div>

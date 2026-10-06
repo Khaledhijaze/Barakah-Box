@@ -225,6 +225,7 @@ export interface UserProfile {
   storeName?: string;
   storeCategory?: string;
   licenseNumber?: string;
+  licenseUrl?: string;
   location?: {
     lat: number;
     lng: number;
