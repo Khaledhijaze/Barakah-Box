@@ -213,7 +213,7 @@ export const ImpactReport: React.FC<ImpactReportProps> = ({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="px-2.5 py-0.5 rounded-full bg-[#85f8c4] text-[#002114] text-xs font-bold">
-                Level 1 Reward
+                {isEn ? (currentRule?.title_en || 'Level 1 Reward') : (currentRule?.title_ar || 'مكافأة المستوى الأول')}
               </span>
               <span className="text-xs text-emerald-200">{tr.milestoneTitle}</span>
             </div>
@@ -224,7 +224,7 @@ export const ImpactReport: React.FC<ImpactReportProps> = ({
           {hasClaimedMilestone ? (
             <div className="bg-white/20 backdrop-blur-md px-4 py-2.5 rounded-2xl flex items-center gap-2 text-xs font-bold">
               <span className="material-symbols-outlined text-[#85f8c4] text-[20px]">verified</span>
-              <span>{isEn ? '5,000 SYP Credited ✓' : 'تم صرف 5,000 ل.س بالمحفظة ✓'}</span>
+              <span>{isEn ? `${rewardAmount.toLocaleString()} SYP Credited ✓` : `تم صرف ${rewardAmount.toLocaleString()} ل.س بالمحفظة ✓`}</span>
             </div>
           ) : isMilestoneEligible ? (
             <button
