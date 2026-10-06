@@ -21,7 +21,7 @@ import { INITIAL_BOXES, INITIAL_ORDERS, INITIAL_DISPUTES, INITIAL_COMMISSIONS, I
 import { resolveLocationFromCoords } from './data/geographyData';
 import { t as translations } from './data/translations';
 import { executeSecurePayout } from './db/supabaseClient';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('ar');

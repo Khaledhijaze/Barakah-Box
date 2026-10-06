@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Language, AccountType, UserProfile } from '../types';
 import { t } from '../data/translations';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface AuthPortalProps {
   onLoginSuccess: (profile: UserProfile) => void;

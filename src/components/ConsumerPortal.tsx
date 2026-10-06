@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { BarakahBox, SyrianGovernorate, SupportTicket, Language } from '../types';
 import { INITIAL_BOXES } from '../data/mockData';
 import { AIAssistantChat } from './AIAssistantChat';

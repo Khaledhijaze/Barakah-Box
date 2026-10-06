@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Language, AccountType } from '../types';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface DevToolsProps {
   onSeedData: () => void;
