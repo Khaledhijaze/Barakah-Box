@@ -255,62 +255,52 @@ export default function App() {
 
   // E2E TESTING SUITE HANDLERS
   const handleSeedData = () => {
+    // 1. Add more orders
     const extraOrders: OrderItem[] = [
       { 
-        id: 'SEED-001', 
-        customerName: 'كمال الشامي', 
+        id: 'DEMO-801', 
+        customerName: 'لمى الأحمد', 
         customerPhone: '0933112233',
         governorate: 'دمشق',
         cityArea: 'الشعلان',
         deliveryAddress: 'شارع المتنبي - بناء 4',
-        storeName: 'مخبز الشامي',
+        storeName: 'أفران الهدى',
         storePhone: '011-223344',
-        boxTitle: 'سلة فواكه طازجة', 
+        boxTitle: 'سلة المخبوزات اليومية', 
         orderType: 'delivery',
-        price: 25000, 
+        price: 18000, 
         status: 'pending', 
         paymentMethod: 'شام كاش', 
-        merchantNet: 21250, 
+        merchantNet: 15300, 
         orderPlacedAt: 'اليوم، 12:00 م',
         pickupWindow: '4:00 م - 6:00 م',
-        financialSplit: {
-          totalCustomerPaid: 25000,
-          merchantShare: 21250,
-          driverShare: 0,
-          platformOperationalFee: 3750,
-          currency: 'ل.س'
-        },
+        financialSplit: { totalCustomerPaid: 18000, merchantShare: 15300, driverShare: 0, platformOperationalFee: 2700, currency: 'ل.س' },
         lifecycle: []
       },
       { 
-        id: 'SEED-002', 
-        customerName: 'سارة يوسف', 
+        id: 'DEMO-802', 
+        customerName: 'فادي المصري', 
         customerPhone: '0944887766',
-        governorate: 'دمشق',
-        cityArea: 'المهاجرين',
-        deliveryAddress: 'الجسر الأبيض - بناء 12',
-        storeName: 'مطعم البركة',
-        storePhone: '011-554433',
-        boxTitle: 'وجبة عشاء عائلية', 
+        governorate: 'حلب',
+        cityArea: 'الشهباء',
+        deliveryAddress: 'حي السبيل - بناء 12',
+        storeName: 'حلويات الشهباء',
+        storePhone: '021-554433',
+        boxTitle: 'مشكل فواكه مجففة', 
         orderType: 'pickup',
-        price: 45000, 
+        price: 35000, 
         status: 'pending', 
         paymentMethod: 'بطاقة بنكية', 
-        merchantNet: 38250, 
+        merchantNet: 29750, 
         orderPlacedAt: 'اليوم، 1:30 م',
         pickupWindow: '8:00 م - 10:00 م',
-        financialSplit: {
-          totalCustomerPaid: 45000,
-          merchantShare: 38250,
-          driverShare: 0,
-          platformOperationalFee: 6750,
-          currency: 'ل.س'
-        },
+        financialSplit: { totalCustomerPaid: 35000, merchantShare: 29750, driverShare: 0, platformOperationalFee: 5250, currency: 'ل.س' },
         lifecycle: []
       },
     ];
+
     setOrders(prev => [...extraOrders, ...prev]);
-    showToast(isEn ? 'Demo data seeded: +2 Stores/Orders' : 'تم إدخال بيانات تجريبية: +2 متاجر وطلبات', 'database', 'success');
+    showToast(isEn ? 'Demo stores & orders seeded across categories' : 'تم توليد متاجر وصناديق تجريبية تغطي كافة التصنيفات والمحافظات', 'database', 'success');
   };
 
   const handleDevTopup = (amt: number) => {
@@ -321,8 +311,12 @@ export default function App() {
   const handleSimulateLifecycle = () => {
     showToast(isEn ? 'Simulating order lifecycle...' : 'بدء محاكاة دورة حياة الطلب...', 'published_with_changes', 'info');
     
-    // 1. Create a "Booked" order
-    const simId = `SIM-${Math.floor(1000 + Math.random() * 9000)}`;
+    // 1. Rescuer chooses and pays
+    const simId = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const price = 15000;
+    const platformFee = 2250;
+    const merchantNet = price - platformFee;
+
     const simOrder: OrderItem = {
       id: simId,
       customerName: 'فادي علي (تجريبي)',
@@ -330,43 +324,69 @@ export default function App() {
       governorate: 'دمشق',
       cityArea: 'المزة',
       deliveryAddress: 'فيلات غربية - بناء 8',
-      storeName: 'حلويات دمشق',
+      storeName: 'حلويات دمشق الدولية',
       storePhone: '011-887766',
       boxTitle: 'سلة حلويات شامية مشكلة',
-      orderType: 'delivery',
-      price: 15000,
+      orderType: 'pickup',
+      price: price,
       status: 'pending',
-      paymentMethod: 'شام كاش',
-      merchantNet: 12750,
-      driverFee: 4000,
-      orderPlacedAt: 'الآن',
+      paymentMethod: 'محفظة بركة',
+      merchantNet: merchantNet,
+      orderPlacedAt: 'الآن (محاكاة)',
       pickupWindow: 'الليلة 9:00 م',
       financialSplit: {
-        totalCustomerPaid: 19000,
-        merchantShare: 12750,
-        driverShare: 4000,
-        platformOperationalFee: 2250,
+        totalCustomerPaid: price,
+        merchantShare: merchantNet,
+        driverShare: 0,
+        platformOperationalFee: platformFee,
         currency: 'ل.س'
       },
-      lifecycle: []
+      lifecycle: [
+        { stepNumber: 1, title: 'حجز السلة', timestamp: 'الآن', actor: 'المستهلك', actorName: 'فادي علي', status: 'completed', summary: 'تم الحجز والسداد من المحفظة', details: 'سداد مبلغ 15,000 ل.س بنجاح' }
+      ]
     };
     
     setOrders(prev => [simOrder, ...prev]);
-    handleDeductWallet(19000);
+    handleDeductWallet(price);
     
-    // 2. Wait and simulate "In Transit"
+    // 2. Partner receives notification (Toast)
     setTimeout(() => {
-      setOrders(prev => prev.map(o => o.id === simId ? { ...o, status: 'in_transit' } : o));
-      showToast(isEn ? `Order ${simId}: Captain Picked Up` : `الطلب ${simId}: الكابتن استلم السلة`, 'two_wheeler', 'info');
+      showToast(isEn ? 'Partner: New Order #BB-' + simId : 'التاجر: استلام طلب جديد رقم #BB-' + simId, 'notifications_active', 'info');
       
-      // 3. Wait and simulate "Delivered"
+      // 3. Partner accepts and prepares
       setTimeout(() => {
-        setOrders(prev => prev.map(o => o.id === simId ? { ...o, status: 'delivered' } : o));
-        handleUpdateMerchantWallet(12750);
-        handleUpdateDriverWallet(4000);
-        showToast(isEn ? `Order ${simId}: Successfully Delivered!` : `الطلب ${simId}: تم التسليم بنجاح!`, 'verified', 'success');
+        setOrders(prev => prev.map(o => o.id === simId ? { 
+          ...o, 
+          status: 'pending', // Still pending but prepared
+          lifecycle: [...o.lifecycle, { stepNumber: 2, title: 'تجهيز السلة', timestamp: 'قبل قليل', actor: 'التاجر', actorName: 'حلويات دمشق', status: 'completed', summary: 'السلة جاهزة للاستلام', details: 'تم تغليف المحتويات وتجهيزها بالفرع' }]
+        } : o));
+        showToast(isEn ? 'Partner: Box Prepared & Ready' : 'التاجر: السلة جاهزة ومغلفة بانتظار الزبون', 'inventory_2', 'success');
+
+        // 4. Simulate OTP Entry / Handover
+        setTimeout(() => {
+          setOrders(prev => prev.map(o => o.id === simId ? { 
+            ...o, 
+            status: 'delivered',
+            verifiedAt: 'الآن',
+            lifecycle: [...o.lifecycle, { stepNumber: 3, title: 'توثيق التسليم', timestamp: 'الآن', actor: 'نظام المقاصة الآلي', actorName: 'Barakah Ledger', status: 'completed', summary: 'تم إدخال OTP وصرف المستحقات', details: `تم تحويل ${merchantNet.toLocaleString()} ل.س لمحفظة التاجر` }]
+          } : o));
+          handleUpdateMerchantWallet(merchantNet);
+          showToast(isEn ? `Order ${simId}: Delivered! Profit: ${merchantNet} SYP` : `الطلب ${simId}: تم التسليم! الربح: ${merchantNet} ل.س`, 'verified', 'success');
+        }, 4000);
       }, 3000);
     }, 2000);
+  };
+
+  const handleResetDatabase = () => {
+    setOrders(INITIAL_ORDERS);
+    setWalletBalance(45000);
+    setMerchantWalletBalance(420000);
+    setDriverWalletBalance(18500);
+    setIsLoggedIn(false);
+    setAuthRole(null);
+    setCurrentAccount('consumer');
+    setCurrentScreen('marketplace-catalog');
+    showToast(isEn ? 'System Reset to Default State' : 'تمت إعادة ضبط النظام للحالة الافتراضية', 'restart_alt', 'info');
   };
 
 
@@ -407,6 +427,7 @@ export default function App() {
         {((currentAccount === 'merchant' || currentAccount === 'admin' || currentAccount === 'driver') && (!isLoggedIn || authRole !== currentAccount)) ? (
           <AuthPortal 
             onLoginSuccess={handleLoginSuccess} 
+            onClose={() => setCurrentAccount('consumer')}
             lang={lang} 
             defaultMode={currentAccount === 'admin' ? 'admin' : currentAccount === 'merchant' ? 'partner' : 'consumer'} 
           />
@@ -629,6 +650,7 @@ export default function App() {
         onSeedData={handleSeedData}
         onTopupWallet={handleDevTopup}
         onSimulateLifecycle={handleSimulateLifecycle}
+        onResetDatabase={handleResetDatabase}
         lang={lang}
       />
 
@@ -641,23 +663,13 @@ export default function App() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md"
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-md"
-            >
-              <button
-                onClick={() => setIsAuthModalOpen(false)}
-                className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/20 hover:bg-white/40 text-white rounded-full flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
+            <div className="relative w-full max-w-md">
               <AuthPortal 
                 onLoginSuccess={handleLoginSuccess}
+                onClose={() => setIsAuthModalOpen(false)}
                 lang={lang}
               />
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

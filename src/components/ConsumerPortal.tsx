@@ -314,13 +314,22 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
             <h1 className="text-xl font-bold text-[#131b2e] mt-0.5">
               {isEn ? 'Rescuer: Rami Al-Saeed' : 'المنقذ: رامي السعيد'}
             </h1>
-            <p className="text-xs text-slate-500">
-              {isEn ? 'Live Location:' : 'الموقع الميداني:'}{' '}
-              {detectedLocation ? (
-                `${isEn ? detectedLocation.gov_en : detectedLocation.gov_ar} - ${isEn ? detectedLocation.dist_en : detectedLocation.dist_ar}`
-              ) : isEn ? 'Detecting...' : 'جاري التحديد...'}
-              {' '} • {isEn ? 'Silver Barakah Tier' : 'عضوية بركة الفضية'}
-            </p>
+            
+            {/* Impact Metrics Mini-Dashboard */}
+            <div className="flex items-center gap-3 mt-1.5 overflow-x-auto no-scrollbar">
+               <div className="flex items-center gap-1 shrink-0">
+                 <span className="material-symbols-outlined text-[14px] text-[#006948]">restaurant</span>
+                 <span className="text-[10px] font-bold text-slate-600">12 وجبة منقذة</span>
+               </div>
+               <div className="flex items-center gap-1 shrink-0">
+                 <span className="material-symbols-outlined text-[14px] text-[#006948]">scale</span>
+                 <span className="text-[10px] font-bold text-slate-600">8.5 كغ محفوظ</span>
+               </div>
+               <div className="flex items-center gap-1 shrink-0">
+                 <span className="material-symbols-outlined text-[14px] text-[#006948]">eco</span>
+                 <span className="text-[10px] font-bold text-slate-600">18 كغ CO2</span>
+               </div>
+            </div>
           </div>
         </div>
 
@@ -596,18 +605,26 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
                     alt={box.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-red-600 text-white font-bold text-xs px-2.5 py-1 rounded-xl shadow-md`}>
-                    {tr.savePercent} {box.discountPercent}%
+                  {/* Surprise Box Tag */}
+                  <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} flex flex-col gap-1.5`}>
+                    <div className="bg-[#006948] text-[#85f8c4] font-bold text-[10px] px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 backdrop-blur-md">
+                      <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                      {isEn ? 'Surprise Box' : 'صندوق مفاجآت بركة'}
+                    </div>
+                    <div className="bg-red-600 text-white font-bold text-[10px] px-2 py-1 rounded-lg shadow-lg text-center">
+                      {tr.savePercent} {box.discountPercent}%
+                    </div>
                   </div>
+                  
                   <div className={`absolute top-3 ${isEn ? 'right-3' : 'left-3'} bg-white/90 backdrop-blur-md text-slate-800 text-[11px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1`}>
                     <span className="material-symbols-outlined text-amber-500 text-[14px]">star</span>
                     <span>{box.rating}</span>
                   </div>
-                  <div className={`absolute bottom-3 ${isEn ? 'left-3' : 'right-3'} bg-black/60 backdrop-blur-sm text-white text-[11px] font-medium px-2.5 py-1 rounded-xl flex items-center gap-1`}>
-                    <span className="material-symbols-outlined text-[14px]">location_on</span>
-                    <span>
-                      {box.governorate} • {box.neighborhood} ({box.distanceKm} {tr.kmUnit})
-                    </span>
+
+                  {/* Real Pickup Countdown (Simulated) */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-white/20 whitespace-nowrap">
+                    <span className="material-symbols-outlined text-[14px] text-amber-400">timer</span>
+                    <span>{isEn ? 'Ends in:' : 'ينتهي خلال:'} 02:45:12</span>
                   </div>
                 </div>
 
@@ -620,12 +637,18 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
                       </span>
                     </div>
                     <h3 className="font-bold text-slate-900 text-sm leading-snug">{box.title}</h3>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{box.description}</p>
+                    <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">{box.description}</p>
+                    
+                    {/* Allergen Warning */}
+                    <div className="mt-2 flex items-center gap-1 text-[9px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                      <span className="material-symbols-outlined text-[12px]">warning</span>
+                      {isEn ? 'May contain allergens (Gluten, Dairy)' : 'قد يحتوي على مسببات حساسية (غلوتين، ألبان)'}
+                    </div>
                   </div>
 
                   <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] text-slate-400 line-through block font-mono">
+                      <span className="text-[10px] text-slate-400 line-through block font-mono leading-none">
                         {box.originalPrice.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
                       </span>
                       <span className="text-base font-bold text-[#006948] font-mono">
@@ -683,19 +706,21 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
                   </span>
                   <h3 className="font-bold text-base text-slate-900 mt-0.5">{activeOrderVoucher.vendor}</h3>
                   <p className="text-xs text-slate-600 mt-0.5">{activeOrderVoucher.itemDesc}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs text-slate-500">{activeOrderVoucher.pickupTime}</span>
-                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col items-center gap-2">
-                <div className="bg-white p-3 rounded-2xl border border-slate-200 text-center shadow-sm">
-                  <span className="text-[10px] text-slate-400 block font-bold">{tr.quickPin}</span>
-                  <span className="text-2xl font-bold font-mono tracking-widest text-[#006948] block mt-0.5">
-                    {activeOrderVoucher.pin}
-                  </span>
+              {/* High-Visibility Large QR / PIN Area */}
+              <div className="bg-white p-6 rounded-[32px] border-4 border-[#006948]/10 text-center shadow-lg relative group">
+                <div className="w-32 h-32 bg-slate-50 rounded-2xl flex items-center justify-center mb-3 mx-auto border-2 border-dashed border-slate-200">
+                   <span className="material-symbols-outlined text-[80px] text-slate-300">qr_code_scanner</span>
+                   <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[100px] text-[#006948] opacity-10 group-hover:opacity-20 transition-opacity">qr_code_2</span>
+                   </div>
                 </div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">{tr.quickPin}</span>
+                <span className="text-3xl font-black font-mono tracking-[0.2em] text-[#006948] block mt-1">
+                  {activeOrderVoucher.pin}
+                </span>
               </div>
             </div>
 
@@ -786,6 +811,13 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => onDeductWallet(-50000)}
+                title={isEn ? 'Demo Topup (+50k)' : 'شحن تجريبي (+50 ألف)'}
+                className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center hover:bg-amber-200 transition-colors cursor-pointer border border-amber-200 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[20px]">science</span>
+              </button>
               <button
                 onClick={onOpenTopup}
                 className="px-4 py-2 bg-[#006948] hover:bg-[#00855d] text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"

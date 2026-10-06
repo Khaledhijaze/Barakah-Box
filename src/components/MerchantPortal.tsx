@@ -23,6 +23,11 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
   const tr = t[lang];
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'dispatch' | 'verification' | 'orders' | 'complaints'>('overview');
   const [selectedBranch, setSelectedBranch] = useState<'damascus' | 'aleppo' | 'homs'>('damascus');
+  
+  // NEW: Store Operational State
+  const [isStorePaused, setIsStorePaused] = useState(false);
+  const [dailyBoxLimit, setDailyBoxLimit] = useState(25);
+  const [isScanning, setIsScanning] = useState(false);
 
   // Dispatch Form
   const [category, setCategory] = useState<string>('مخبوزات ومعجنات');
@@ -209,13 +214,22 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
                 {merchantWalletBalance.toLocaleString('ar-SY')} ل.س
               </span>
             </div>
-            <button
-              onClick={onOpenPayout}
-              className="mr-2 px-2.5 py-1 bg-[#006948] hover:bg-[#00855d] text-white rounded-xl text-[11px] font-bold shadow-sm cursor-pointer flex items-center gap-1"
-            >
-              <span className="material-symbols-outlined text-[15px]">security</span>
-              <span>{tr.withdrawAction}</span>
-            </button>
+            <div className="flex items-center gap-1.5 mr-2">
+              <button
+                onClick={() => onUpdateMerchantWallet(50000)}
+                title={isEn ? 'Demo Topup (+50k)' : 'شحن تجريبي (+50 ألف)'}
+                className="w-7 h-7 rounded-lg bg-[#006948] text-[#85f8c4] flex items-center justify-center hover:bg-[#005137] transition-colors cursor-pointer shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">bug_report</span>
+              </button>
+              <button
+                onClick={onOpenPayout}
+                className="px-2.5 py-1 bg-white border border-[#85f8c4] text-[#006948] hover:bg-[#f5fff7] rounded-xl text-[11px] font-bold shadow-sm cursor-pointer flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[15px]">security</span>
+                <span>{tr.withdrawAction}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -277,6 +291,48 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
       {/* SUB-TAB 1: OVERVIEW */}
       {activeSubTab === 'overview' && (
         <div className="flex flex-col gap-6 animate-in fade-in">
+          {/* Operational Controls Card */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isStorePaused ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                      <span className="material-symbols-outlined">{isStorePaused ? 'pause_circle' : 'play_circle'}</span>
+                   </div>
+                   <div>
+                      <span className="text-xs font-bold text-slate-800 block">{isEn ? 'Store Status' : 'حالة المتجر'}</span>
+                      <span className="text-[10px] text-slate-500">{isStorePaused ? (isEn ? 'Temporarily Paused' : 'متوقف مؤقتاً') : (isEn ? 'Open & Active' : 'مفتوح ونشط')}</span>
+                   </div>
+                </div>
+                <button 
+                  onClick={() => setIsStorePaused(!isStorePaused)}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${isStorePaused ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-red-600 text-white shadow-lg shadow-red-200'}`}
+                >
+                   {isStorePaused ? (isEn ? 'Resume Store' : 'تفعيل المتجر') : (isEn ? 'Pause Store' : 'إيقاف مؤقت')}
+                </button>
+             </div>
+
+             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                      <span className="material-symbols-outlined">inventory</span>
+                   </div>
+                   <div>
+                      <span className="text-xs font-bold text-slate-800 block">{isEn ? 'Daily Box Limit' : 'الحد اليومي للصناديق'}</span>
+                      <span className="text-[10px] text-slate-500">{dailyBoxLimit} {tr.boxesCount}</span>
+                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                   <button onClick={() => setDailyBoxLimit(Math.max(1, dailyBoxLimit - 1))} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 cursor-pointer">
+                      <span className="material-symbols-outlined text-[16px]">remove</span>
+                   </button>
+                   <span className="text-sm font-black text-indigo-600 w-8 text-center">{dailyBoxLimit}</span>
+                   <button onClick={() => setDailyBoxLimit(dailyBoxLimit + 1)} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 cursor-pointer">
+                      <span className="material-symbols-outlined text-[16px]">add</span>
+                   </button>
+                </div>
+             </div>
+          </div>
+
           <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
               <span className="text-xs text-slate-500 font-bold block">سلال تم بيعها اليوم</span>
@@ -469,6 +525,40 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
           </div>
 
           <div className="max-w-md mx-auto w-full bg-[#f2f3ff] p-6 rounded-3xl border border-slate-200 flex flex-col gap-4 text-xs">
+            {/* QR Scanner Simulation */}
+            <div className="relative aspect-square w-full bg-slate-900 rounded-[32px] overflow-hidden flex items-center justify-center group mb-4">
+               {isScanning ? (
+                  <>
+                    <div className="absolute inset-0 bg-slate-800 animate-pulse"></div>
+                    <div className="absolute inset-x-8 top-1/2 h-0.5 bg-[#85f8c4] shadow-[0_0_15px_#85f8c4] animate-scan"></div>
+                    <span className="text-white text-[10px] font-bold z-10">{isEn ? 'Searching for QR Code...' : 'جاري البحث عن الرمز...'}</span>
+                  </>
+               ) : (
+                  <div className="text-center p-8">
+                    <span className="material-symbols-outlined text-[60px] text-slate-700 group-hover:scale-110 transition-transform">qr_code_scanner</span>
+                    <p className="text-slate-500 mt-2 font-bold">{isEn ? 'Scanner Ready' : 'الماسح الضوئي جاهز'}</p>
+                  </div>
+               )}
+               <button 
+                onClick={() => {
+                  setIsScanning(true);
+                  setTimeout(() => {
+                    setIsScanning(false);
+                    onShowToast(isEn ? 'QR Code Scanned Successfully!' : 'تم مسح الرمز بنجاح!', 'qr_code_2', 'success');
+                  }, 2500);
+                }}
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-2.5 bg-white text-slate-900 rounded-full font-bold text-[10px] shadow-xl hover:bg-slate-50 transition-all cursor-pointer"
+               >
+                 {isScanning ? (isEn ? 'Cancel' : 'إلغاء') : (isEn ? 'Start QR Scan' : 'بدء المسح الضوئي')}
+               </button>
+            </div>
+
+            <div className="relative flex items-center justify-center gap-4 text-slate-400 my-2">
+               <div className="flex-1 h-px bg-slate-200"></div>
+               <span className="text-[10px] font-bold uppercase tracking-widest">{isEn ? 'OR ENTER PIN' : 'أو أدخل الرمز يدوياً'}</span>
+               <div className="flex-1 h-px bg-slate-200"></div>
+            </div>
+
             <div>
               <label className="font-bold text-slate-700 block mb-1">اختر رقم الطلب المراد تسليمه:</label>
               <select

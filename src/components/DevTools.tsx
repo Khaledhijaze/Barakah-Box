@@ -6,6 +6,7 @@ interface DevToolsProps {
   onSeedData: () => void;
   onTopupWallet: (amount: number) => void;
   onSimulateLifecycle: () => void;
+  onResetDatabase: () => void;
   lang: Language;
 }
 
@@ -13,6 +14,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
   onSeedData,
   onTopupWallet,
   onSimulateLifecycle,
+  onResetDatabase,
   lang,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -108,10 +110,33 @@ export const DevTools: React.FC<DevToolsProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
-                    {isEn ? 'Simulate Order Lifecycle' : 'محاكاة دورة حياة الطلب'}
+                    {isEn ? 'Simulate Order Lifecycle' : 'بدء محاكاة دورة حياة الطلب'}
                   </span>
                   <span className="text-[9px] text-slate-500">
-                    {isEn ? 'Booking -> QR -> Delivery' : 'حجز، توليد رمز، قبول وتسليم'}
+                    {isEn ? 'Booking -> PIN -> Partner -> Success' : 'حجز، توليد رمز، قبول المتجر وتسليم'}
+                  </span>
+                </div>
+              </button>
+
+              {/* Reset Database Button */}
+              <button
+                onClick={() => {
+                  if (confirm(isEn ? 'Are you sure you want to reset all data?' : 'هل أنت متأكد من مسح كافة البيانات التجريبية وإعادة الضبط؟')) {
+                    onResetDatabase();
+                    setIsOpen(false);
+                  }
+                }}
+                className="w-full p-3 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-2xl text-left flex items-center gap-3 transition-all group cursor-pointer"
+              >
+                <div className="w-8 h-8 bg-red-100 text-red-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">restart_alt</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">
+                    {isEn ? 'Reset Test Environment' : 'إعادة ضبط بيئة الاختبار'}
+                  </span>
+                  <span className="text-[9px] text-slate-500">
+                    {isEn ? 'Clear all orders & mock data' : 'مسح العمليات التجريبية والبدء من جديد'}
                   </span>
                 </div>
               </button>

@@ -28,3 +28,12 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes scan {
+  0%, 100% { top: 15%; }
+  50% { top: 85%; }
+}
+
+.animate-scan {
+  animation: scan 2s linear infinite;
+}
