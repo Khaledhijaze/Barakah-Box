@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { OrderItem, DisputeIncident, CommissionTier, AuditLog, SyrianGovernorate, SupportTicket, Language, RewardRule } from '../types';
 import { OrderLifecycleInspector } from './OrderLifecycleInspector';
+import { t } from '../data/translations';
 
 interface AdminPortalProps {
   orders: OrderItem[];
@@ -30,6 +31,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   lang = 'ar',
 }) => {
   const isEn = lang === 'en';
+  const tr = t[lang];
   const [activeTab, setActiveTab] = useState<'inspector' | 'disputes' | 'settlement' | 'commissions' | 'rewards' | 'partners' | 'audit'>('inspector');
   const [selectedGovernorate, setSelectedGovernorate] = useState<SyrianGovernorate>('الكل');
 
@@ -574,19 +576,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </td>
 
                       <td className="py-3 px-3">
-                        {t.status === 'auto_refunded' ? (
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            استرداد فوري ⚡
-                          </span>
-                        ) : t.status === 'resolved' ? (
-                          <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            تم الحسم والتسوية
-                          </span>
-                        ) : (
-                          <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            بانتظار القرار
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1">
+                          <input 
+                            type="text"
+                            inputMode="numeric"
+                            value={t.refundAmount || 0}
+                            onChange={(e) => {
+                              const val = Number(e.target.value.replace(/\D/g, ''));
+                              setTicketQueue(prev => prev.map(item => item.id === t.id ? { ...item, refundAmount: val } : item));
+                            }}
+                            className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold font-mono text-[#006948]"
+                          />
+                          <span className="text-[9px] text-slate-400 block">{tr.currency}</span>
+                        </div>
                       </td>
 
                       <td className="py-3 px-3 text-center">
@@ -791,9 +793,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-700">مبلغ المكافأة (ل.س):</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={bonusAmount}
-                  onChange={(e) => setBonusAmount(Number(e.target.value))}
+                  onChange={(e) => setBonusAmount(Number(e.target.value.replace(/\D/g, '')))}
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold font-mono"
                 />
               </div>

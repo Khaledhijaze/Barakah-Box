@@ -114,10 +114,10 @@ export const PayoutModal: React.FC<PayoutModalProps> = ({
                     <label className="text-xs font-bold text-slate-700 mb-1.5 block">{tr.withdrawAmountLabel}</label>
                     <div className="relative">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         value={amount}
-                        onChange={(e) => setAmount(Number(e.target.value))}
-                        max={Math.min(currentBalance, dailyLimit)}
+                        onChange={(e) => setAmount(Number(e.target.value.replace(/\D/g, '')))}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-[#006948]/20 focus:border-[#006948] outline-none transition-all"
                       />
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">

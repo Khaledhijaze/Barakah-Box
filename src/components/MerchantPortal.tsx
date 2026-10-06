@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { OrderItem, MerchantComplaint, Language } from '../types';
+import { OrderItem, MerchantComplaint, Language, UserProfile } from '../types';
 import { t } from '../data/translations';
 
 interface MerchantPortalProps {
@@ -314,7 +314,13 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
                    <button onClick={() => setDailyBoxLimit(Math.max(1, dailyBoxLimit - 1))} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 cursor-pointer">
                       <span className="material-symbols-outlined text-[16px]">remove</span>
                    </button>
-                   <span className="text-sm font-black text-indigo-600 w-8 text-center">{dailyBoxLimit}</span>
+                   <input 
+                    type="text" 
+                    inputMode="numeric"
+                    value={dailyBoxLimit}
+                    onChange={(e) => setDailyBoxLimit(Number(e.target.value.replace(/\D/g, '')))}
+                    className="text-sm font-black text-indigo-600 w-12 text-center bg-transparent border-none focus:outline-none"
+                   />
                    <button onClick={() => setDailyBoxLimit(dailyBoxLimit + 1)} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 cursor-pointer">
                       <span className="material-symbols-outlined text-[16px]">add</span>
                    </button>

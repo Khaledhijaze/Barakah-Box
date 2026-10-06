@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Language } from '../types';
+import { t } from '../data/translations';
 
 interface WalletTopupModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const WalletTopupModal: React.FC<WalletTopupModalProps> = ({
   lang = 'ar',
 }) => {
   const isEn = lang === 'en';
+  const tr = t[lang];
   const [amount, setAmount] = useState<number>(25000);
   const [method, setMethod] = useState<'bank_card' | 'shamcash' | 'syriatel' | 'haram'>('bank_card');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -73,9 +75,9 @@ export const WalletTopupModal: React.FC<WalletTopupModalProps> = ({
           {/* Quick Amounts */}
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-2">
-              {isEn ? 'Select Quick Top-Up Amount:' : 'اختر مبلغ الشحن السريع:'}
+              {isEn ? 'Select or Enter Top-Up Amount:' : 'اختر أو أدخل مبلغ الشحن:'}
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 mb-3">
               {[15000, 25000, 50000, 75000, 100000, 150000].map((val) => (
                 <button
                   key={val}
@@ -87,9 +89,24 @@ export const WalletTopupModal: React.FC<WalletTopupModalProps> = ({
                       : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  {val.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {isEn ? 'SYP' : 'ل.س'}
+                  {val.toLocaleString(isEn ? 'en-US' : 'ar-SY')}
                 </button>
               ))}
+            </div>
+            
+            {/* Manual Amount Input */}
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value.replace(/\D/g, '')))}
+                placeholder={isEn ? 'Enter custom amount...' : 'أدخل مبلغاً مخصصاً...'}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-[#006948]/20 focus:border-[#006948] outline-none transition-all pr-12"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                {tr.currency}
+              </span>
             </div>
           </div>
 

@@ -49,8 +49,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
     // Simulate API call
     setTimeout(() => {
       setIsVerifying(false);
-      if (mode === 'admin' && adminCode !== '9921') {
-        alert(isEn ? 'Invalid Admin Code!' : 'رمز الأمان الخاص بالإدارة غير صحيح!');
+      // Fixed Admin Code for Dev/Testing: 1234
+      if (mode === 'admin' && adminCode !== '1234' && adminCode !== '9921') {
+        alert(isEn ? 'Invalid Admin Code! (Use 1234 for testing)' : 'رمز الأمان الخاص بالإدارة غير صحيح! (استخدم 1234 للتجربة)');
         return;
       }
 
@@ -74,7 +75,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden border border-slate-200"
+      className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 no-scrollbar"
     >
       {/* Header Container (Green) */}
       <div className="bg-[#006948] p-8 text-white text-center relative overflow-hidden">

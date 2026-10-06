@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AccountType, AppScreen, SyrianGovernorate, OrderItem, DisputeIncident, CommissionTier, AuditLog, Language, RewardRule } from './types';
+import { AccountType, AppScreen, SyrianGovernorate, OrderItem, DisputeIncident, CommissionTier, AuditLog, Language, RewardRule, UserProfile } from './types';
 import { Navbar } from './components/Navbar';
 import { ConsumerPortal } from './components/ConsumerPortal';
 import { MerchantPortal } from './components/MerchantPortal';

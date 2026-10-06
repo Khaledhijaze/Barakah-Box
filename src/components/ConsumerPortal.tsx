@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { BarakahBox, SyrianGovernorate, SupportTicket, Language } from '../types';
 import { INITIAL_BOXES } from '../data/mockData';
 import { AIAssistantChat } from './AIAssistantChat';
@@ -126,6 +127,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
   const [newTicketMessage, setNewTicketMessage] = useState('');
 
   // Active reservation voucher
+  const [isQrEnlarged, setIsQrEnlarged] = useState(false);
   const [activeOrderVoucher, setActiveOrderVoucher] = useState({
     orderId: '#BB-9048',
     vendor: 'مخبز وشمسين للشامي الأصيل',
@@ -711,12 +713,19 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
 
               {/* High-Visibility Large QR / PIN Area */}
               <div className="bg-white p-6 rounded-[32px] border-4 border-[#006948]/10 text-center shadow-lg relative group">
-                <div className="w-32 h-32 bg-slate-50 rounded-2xl flex items-center justify-center mb-3 mx-auto border-2 border-dashed border-slate-200">
-                   <span className="material-symbols-outlined text-[80px] text-slate-300">qr_code_scanner</span>
-                   <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[100px] text-[#006948] opacity-10 group-hover:opacity-20 transition-opacity">qr_code_2</span>
+                <button 
+                  onClick={() => setIsQrEnlarged(true)}
+                  className="w-32 h-32 bg-slate-50 rounded-2xl flex items-center justify-center mb-3 mx-auto border-2 border-slate-200 overflow-hidden cursor-zoom-in relative"
+                >
+                   <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=BARAKAH-${activeOrderVoucher.orderId}-${activeOrderVoucher.pin}`} 
+                    alt="QR Code"
+                    className="w-full h-full object-contain p-2"
+                   />
+                   <div className="absolute inset-0 bg-[#006948]/0 hover:bg-[#006948]/5 transition-all flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white opacity-0 hover:opacity-100 drop-shadow-md">zoom_in</span>
                    </div>
-                </div>
+                </button>
                 <span className="text-[10px] text-slate-400 block font-bold uppercase">{tr.quickPin}</span>
                 <span className="text-3xl font-black font-mono tracking-[0.2em] text-[#006948] block mt-1">
                   {activeOrderVoucher.pin}
@@ -1622,6 +1631,43 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
           </div>
         </div>
       )}
+      {/* QR Code Enlargement Overlay */}
+      <AnimatePresence>
+        {isQrEnlarged && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsQrEnlarged(false)}
+            className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-white cursor-zoom-out"
+          >
+            <div className="bg-white p-8 rounded-[40px] shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+               <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=BARAKAH-${activeOrderVoucher.orderId}-${activeOrderVoucher.pin}`} 
+                alt="Enlarged QR Code"
+                className="w-64 h-64 sm:w-80 sm:h-80 object-contain"
+               />
+               <button 
+                onClick={() => setIsQrEnlarged(false)}
+                className="absolute -top-4 -right-4 w-10 h-10 bg-red-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer text-white"
+               >
+                  <span className="material-symbols-outlined">close</span>
+               </button>
+            </div>
+            <div className="mt-8 text-center" onClick={(e) => e.stopPropagation()}>
+               <h3 className="text-xl font-bold">{activeOrderVoucher.vendor}</h3>
+               <p className="text-white/60 font-mono mt-1">Order: {activeOrderVoucher.orderId}</p>
+               <div className="mt-4 text-4xl font-black tracking-[0.3em] bg-white/10 px-6 py-3 rounded-2xl border border-white/20">
+                  {activeOrderVoucher.pin}
+               </div>
+               <p className="mt-6 text-sm font-bold text-[#85f8c4] flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined">qr_code_scanner</span>
+                  {isEn ? 'Point the scanner at this code' : 'وجّه الماسح الضوئي نحو هذا الكود'}
+               </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
