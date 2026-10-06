@@ -30,7 +30,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   lang = 'ar',
 }) => {
   const isEn = lang === 'en';
-  const [activeTab, setActiveTab] = useState<'inspector' | 'disputes' | 'settlement' | 'commissions' | 'rewards' | 'audit'>('inspector');
+  const [activeTab, setActiveTab] = useState<'inspector' | 'disputes' | 'settlement' | 'commissions' | 'rewards' | 'partners' | 'audit'>('inspector');
   const [selectedGovernorate, setSelectedGovernorate] = useState<SyrianGovernorate>('الكل');
 
   // Inspector order target
@@ -340,6 +340,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         >
           <span className="material-symbols-outlined text-[16px]">redeem</span>
           <span>إدارة شرائح المكافآت والبونص</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('partners')}
+          className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'partners' ? 'bg-[#006948] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">group</span>
+          <span>إدارة الشركاء وكلمات المرور</span>
         </button>
 
         <button
@@ -896,7 +906,66 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         </div>
       )}
 
-      {/* TAB 6: AUDIT LOGS */}
+      {/* TAB 6: PARTNERS MANAGEMENT */}
+      {activeTab === 'partners' && (
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col gap-6 animate-in fade-in">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">إدارة الشركاء وحسابات المتاجر</h2>
+              <p className="text-xs text-slate-500">تغيير كلمات المرور، مراجعة الوثائق، وتعديل حالات النشاط</p>
+            </div>
+            <button className="px-4 py-2 bg-[#006948] text-white rounded-xl text-xs font-bold">إضافة شريك جديد</button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <th className="py-3 px-4">المتجر والشريك</th>
+                  <th className="py-3 px-4">المحافظة</th>
+                  <th className="py-3 px-4">رقم الهاتف</th>
+                  <th className="py-3 px-4">الحالة</th>
+                  <th className="py-3 px-4 text-center">إدارة الحساب</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {[
+                  { id: 1, name: "مخبز وشمسين", owner: "سامي عثمان", gov: "دمشق", phone: "011-9048", status: "نشط" },
+                  { id: 2, name: "حلويات الشهباء", owner: "محمد حلب", gov: "حلب", phone: "021-5544", status: "نشط" },
+                  { id: 3, name: "سوبر ماركت الياسمين", owner: "هدى أحمد", gov: "ريف دمشق", phone: "011-4433", status: "معلق" },
+                ].map(p => (
+                  <tr key={p.id} className="hover:bg-slate-50">
+                    <td className="py-3 px-4">
+                      <span className="font-bold block">{p.name}</span>
+                      <span className="text-[10px] text-slate-400">المفوض: {p.owner}</span>
+                    </td>
+                    <td className="py-3 px-4">{p.gov}</td>
+                    <td className="py-3 px-4">{p.phone}</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === 'نشط' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {p.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <button 
+                        onClick={() => {
+                          const newPass = prompt(isEn ? 'Enter New Password:' : 'أدخل كلمة المرور الجديدة:');
+                          if (newPass) onShowToast(isEn ? `Password reset for ${p.name}` : `تم إعادة ضبط كلمة المرور لـ ${p.name}`, 'lock_reset');
+                        }}
+                        className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-bold hover:bg-slate-50 transition-colors"
+                      >
+                        إعادة ضبط كلمة المرور
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 7: AUDIT LOGS */}
       {activeTab === 'audit' && (
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col gap-6 animate-in fade-in">
           <div>

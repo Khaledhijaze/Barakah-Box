@@ -28,6 +28,7 @@ export default function App() {
   const [currentAccount, setCurrentAccount] = useState<AccountType>('consumer');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authRole, setAuthRole] = useState<AccountType | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('marketplace-catalog');
 
@@ -241,16 +242,18 @@ export default function App() {
     showToast(isEn ? `Switched to: ${label}` : `تم التبديل إلى: ${label}`, 'login');
   };
 
-  const handleLoginSuccess = (role: AccountType) => {
+  const handleLoginSuccess = (profile: UserProfile) => {
     setIsLoggedIn(true);
-    setAuthRole(role);
-    setCurrentAccount(role);
+    setAuthRole(profile.role);
+    setUserProfile(profile);
+    setCurrentAccount(profile.role);
     setIsAuthModalOpen(false);
-    if (role === 'consumer') setCurrentScreen('marketplace-catalog');
-    if (role === 'merchant') setCurrentScreen('merchant-dashboard');
-    if (role === 'admin') setCurrentScreen('platform-admin');
     
-    showToast(isEn ? 'Logged in successfully!' : 'تم تسجيل الدخول بنجاح!', 'verified', 'success');
+    if (profile.role === 'consumer') setCurrentScreen('marketplace-catalog');
+    if (profile.role === 'merchant') setCurrentScreen('merchant-dashboard');
+    if (profile.role === 'admin') setCurrentScreen('platform-admin');
+    
+    showToast(isEn ? `Welcome ${profile.name}!` : `مرحباً بك ${profile.name}!`, 'verified', 'success');
   };
 
   // E2E TESTING SUITE HANDLERS
@@ -393,6 +396,7 @@ export default function App() {
   const handleLogout = () => {
     setIsLoggedIn(false);
     setAuthRole(null);
+    setUserProfile(null);
     setCurrentAccount('consumer');
     setCurrentScreen('marketplace-catalog');
     showToast(isEn ? 'Logged out' : 'تم تسجيل الخروج', 'logout', 'info');
@@ -498,6 +502,7 @@ export default function App() {
                 onOpenPayout={() => setIsPayoutOpen(true)}
                 onShowToast={showToast}
                 lang={lang}
+                userProfile={userProfile}
               />
             )}
 

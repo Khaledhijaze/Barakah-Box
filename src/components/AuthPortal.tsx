@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Language, AccountType } from '../types';
+import { Language, AccountType, UserProfile } from '../types';
 import { t } from '../data/translations';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthPortalProps {
-  onLoginSuccess: (role: AccountType) => void;
+  onLoginSuccess: (profile: UserProfile) => void;
   onClose: () => void;
   lang?: Language;
   defaultMode?: 'consumer' | 'partner' | 'admin';
@@ -30,6 +30,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
   const [storeName, setStoreName] = useState('');
   const [storeCategory, setStoreCategory] = useState<'produce' | 'grocery' | 'bakeries' | 'restaurants' | 'sweets'>('bakeries');
   const [adminCode, setAdminCode] = useState('');
+  const [gpsLocation, setGpsLocation] = useState<{lat: number, lng: number} | undefined>(undefined);
   
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -52,7 +53,20 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         alert(isEn ? 'Invalid Admin Code!' : 'رمز الأمان الخاص بالإدارة غير صحيح!');
         return;
       }
-      onLoginSuccess(mode === 'partner' ? 'merchant' : mode);
+
+      const profile: UserProfile = {
+        id: `USR-${Math.floor(Math.random() * 10000)}`,
+        name: mode === 'consumer' ? (name || 'المنقذ الشامي') : (name || 'شريك بركة'),
+        role: mode === 'partner' ? 'merchant' : mode,
+        phoneNumber: phoneNumber || email,
+        email: email,
+        storeName: mode === 'partner' ? storeName : undefined,
+        storeCategory: mode === 'partner' ? storeCategory : undefined,
+        licenseNumber: mode === 'partner' ? `SY-LIC-${Math.floor(Math.random() * 9000 + 1000)}` : undefined,
+        location: gpsLocation ? { lat: gpsLocation.lat, lng: gpsLocation.lng, address: isEn ? 'Verified via GPS' : 'تم التوثيق عبر GPS' } : undefined
+      };
+
+      onLoginSuccess(profile);
     }, 1500);
   };
 
@@ -137,10 +151,10 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Common Field: Name (SignUp only) */}
-          {authType === 'signup' && mode === 'consumer' && (
+          {authType === 'signup' && (mode === 'consumer' || mode === 'partner') && (
             <div>
               <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wider">
-                {isEn ? 'Full Name' : 'الاسم بالكامل'}
+                {isEn ? 'Full Name / Owner Name' : 'الاسم بالكامل / المفوض'}
               </label>
               <input
                 type="text"
@@ -154,17 +168,42 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
           {/* Store Name (Partner only) */}
           {mode === 'partner' && (
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wider">
-                {isEn ? 'Store / Business Name' : 'اسم المتجر / المنشأة'}
-              </label>
-              <input
-                type="text"
-                value={storeName}
-                onChange={(e) => setStoreName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-4 focus:ring-[#006948]/5 outline-none transition-all"
-                required
-              />
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wider">
+                  {isEn ? 'Store / Business Name' : 'اسم المتجر / المنشأة'}
+                </label>
+                <input
+                  type="text"
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-4 focus:ring-[#006948]/5 outline-none transition-all"
+                  required
+                />
+              </div>
+              
+              {authType === 'signup' && (
+                <div>
+                   <label className="text-[10px] font-bold text-slate-500 mb-2 block uppercase tracking-wider">
+                    {isEn ? 'Store Location (GPS)' : 'موقع المتجر (GPS)'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if ('geolocation' in navigator) {
+                        navigator.geolocation.getCurrentPosition((pos) => {
+                          setGpsLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                          alert(isEn ? 'Location Pinned Successfully!' : 'تم تثبيت موقع المتجر بنجاح!');
+                        });
+                      }
+                    } }
+                    className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 transition-all font-bold text-xs ${gpsLocation ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-[#006948]'}`}
+                  >
+                    <span className="material-symbols-outlined">{gpsLocation ? 'location_on' : 'add_location_alt'}</span>
+                    {gpsLocation ? (isEn ? 'GPS Location Locked' : 'تم قفل الموقع الجغرافي') : (isEn ? 'Pin Store on Map (GPS)' : 'تحديد موقع المتجر على الخريطة')}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -209,19 +248,21 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
             />
           </div>
 
-          {/* Password */}
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wider">
-              {isEn ? 'Secure Password' : 'كلمة المرور'}
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-4 focus:ring-[#006948]/5 outline-none transition-all"
-              required
-            />
-          </div>
+          {/* Password - Hidden for Rescuers as per request */}
+          {mode !== 'consumer' && (
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wider">
+                {isEn ? 'Secure Password' : 'كلمة المرور'}
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-4 focus:ring-[#006948]/5 outline-none transition-all"
+                required
+              />
+            </div>
+          )}
 
           {/* Admin Code */}
           {mode === 'admin' && (

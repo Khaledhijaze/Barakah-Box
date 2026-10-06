@@ -9,6 +9,7 @@ interface MerchantPortalProps {
   onOpenPayout: () => void;
   onShowToast: (text: string, icon?: string, type?: 'success' | 'error' | 'info') => void;
   lang?: Language;
+  userProfile?: UserProfile | null;
 }
 
 export const MerchantPortal: React.FC<MerchantPortalProps> = ({
@@ -18,6 +19,7 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
   onOpenPayout,
   onShowToast,
   lang = 'ar',
+  userProfile,
 }) => {
   const isEn = lang === 'en';
   const tr = t[lang];
@@ -184,28 +186,15 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
               </span>
               <span className="text-xs text-slate-500 font-semibold">{tr.partnerPortalView}</span>
             </div>
-            <h1 className="text-xl font-bold text-[#131b2e] mt-0.5">مخبز وشمسين للشامي الأصيل</h1>
+            <h1 className="text-xl font-bold text-[#131b2e] mt-0.5">{userProfile?.storeName || 'مخبز وشمسين للشامي الأصيل'}</h1>
             <p className="text-xs text-slate-500">
-              ترخيص تجاري رقم: SY-DAM-9921 • فرع دمشق / الفيلات الشرقية
+              {isEn ? 'Business License: ' : 'ترخيص تجاري رقم: '} {userProfile?.licenseNumber || 'SY-DAM-9921'} • {userProfile?.location?.address || (isEn ? 'Damascus / Mazzeh' : 'فرع دمشق / المزة')}
             </p>
           </div>
         </div>
 
-        {/* Branch Selector & Financial Balance */}
+        {/* Financial Balance & Store Info */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <select
-            value={selectedBranch}
-            onChange={(e) => {
-              setSelectedBranch(e.target.value as any);
-              onShowToast('تم تبديل فرع المتجر النشط', 'store');
-            }}
-            className="bg-slate-100 font-bold text-xs text-slate-800 px-3 py-2 rounded-2xl border border-slate-200 cursor-pointer"
-          >
-            <option value="damascus">فرع دمشق (المزة / الفيلات)</option>
-            <option value="aleppo">فرع حلب (الشهباء / الجميلية)</option>
-            <option value="homs">فرع حمص (الدبلان)</option>
-          </select>
-
           <div className="bg-[#f5fff7] border border-[#85f8c4] px-4 py-2 rounded-2xl flex items-center gap-2 text-xs">
             <span className="material-symbols-outlined text-[#006948] text-[20px]">account_balance_wallet</span>
             <div>
@@ -438,11 +427,10 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
             <div>
               <label className="font-bold text-slate-700 block mb-1">الكمية المتاحة (عدد السلال):</label>
               <input
-                type="number"
-                min={1}
-                max={50}
+                type="text"
+                inputMode="numeric"
                 value={qty}
-                onChange={(e) => setQty(Number(e.target.value))}
+                onChange={(e) => setQty(Number(e.target.value.replace(/\D/g, '')))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
               />
             </div>
@@ -450,10 +438,10 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
             <div>
               <label className="font-bold text-slate-700 block mb-1">السعر الأصلي المعتاد (ل.س):</label>
               <input
-                type="number"
-                step={500}
+                type="text"
+                inputMode="numeric"
                 value={origPrice}
-                onChange={(e) => setOrigPrice(Number(e.target.value))}
+                onChange={(e) => setOrigPrice(Number(e.target.value.replace(/\D/g, '')))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 font-bold"
               />
             </div>
@@ -463,10 +451,10 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
                 سعر بركة المخفض للزبون (ل.س) - <span className="text-[#006948]">خصم {discountPercent}%</span>:
               </label>
               <input
-                type="number"
-                step={500}
+                type="text"
+                inputMode="numeric"
                 value={barakahPrice}
-                onChange={(e) => setBarakahPrice(Number(e.target.value))}
+                onChange={(e) => setBarakahPrice(Number(e.target.value.replace(/\D/g, '')))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-[#006948] font-bold"
               />
             </div>
@@ -594,10 +582,21 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
               </div>
             </div>
 
+            <div className="flex flex-col gap-3">
+               <label className="font-bold text-slate-700 block mb-1">{isEn ? 'Handover Proof (Photo Requirement):' : 'إثبات التسليم (مطلوب صورة):'}</label>
+               <button 
+                type="button"
+                className="w-full border-2 border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 hover:border-[#006948] hover:bg-emerald-50/30 transition-all group"
+               >
+                 <span className="material-symbols-outlined text-[32px] text-slate-400 group-hover:text-[#006948]">add_a_photo</span>
+                 <span className="text-slate-500 group-hover:text-[#006948] font-bold">{isEn ? 'Capture or Upload Delivery Proof' : 'التقاط أو رفع صورة إثبات التسليم'}</span>
+               </button>
+            </div>
+
             <button
               type="button"
               onClick={handleCompleteVerification}
-              className="w-full py-3 bg-[#006948] hover:bg-[#00855d] text-white rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-1"
+              className="w-full py-4 bg-[#006948] hover:bg-[#00855d] text-white rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               <span className="material-symbols-outlined text-[18px]">verified</span>
               <span>تأكيد التسليم وصرف المستحقات لمحفظة المتجر</span>

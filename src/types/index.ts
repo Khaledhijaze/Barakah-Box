@@ -216,3 +216,19 @@ export interface RewardRule {
   description_en: string;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  role: AccountType;
+  phoneNumber?: string;
+  email?: string;
+  storeName?: string;
+  storeCategory?: string;
+  licenseNumber?: string;
+  location?: {
+    lat: number;
+    lng: number;
+    address?: string;
+  };
+}
+
