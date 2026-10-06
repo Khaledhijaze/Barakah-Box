@@ -24,7 +24,6 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
   const isEn = lang === 'en';
   const tr = t[lang];
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'dispatch' | 'verification' | 'orders' | 'complaints'>('overview');
-  const [selectedBranch, setSelectedBranch] = useState<'damascus' | 'aleppo' | 'homs'>('damascus');
   
   // NEW: Store Operational State
   const [isStorePaused, setIsStorePaused] = useState(false);
@@ -117,11 +116,13 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
     const payout = order.merchantNet || 13600;
     onUpdateMerchantWallet(payout);
 
+    const branchName = userProfile?.location?.address || (isEn ? 'Main Branch' : 'الفرع الرئيسي');
+
     const newCmp: MerchantComplaint = {
       id: `CMP-NOSHOW-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: 'الآن (معتمد آلياً)',
-      merchantName: 'مخبز وشمسين للشامي الأصيل',
-      branch: selectedBranch === 'damascus' ? 'فرع دمشق (المزة)' : selectedBranch === 'aleppo' ? 'فرع حلب (الشهباء)' : 'فرع حمص (الدبلان)',
+      merchantName: userProfile?.storeName || 'مخبز وشمسين للشامي الأصيل',
+      branch: branchName,
       orderNumber: `#BB-${order.id}`,
       customerName: order.customerName,
       complaintType: 'تخلف الزبون عن الاستلام',
@@ -146,17 +147,12 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
       return;
     }
 
-    const branchName =
-      selectedBranch === 'damascus'
-        ? 'فرع دمشق (المزة)'
-        : selectedBranch === 'aleppo'
-        ? 'فرع حلب (الشهباء)'
-        : 'فرع حمص (الدبلان)';
+    const branchName = userProfile?.location?.address || (isEn ? 'Main Branch' : 'الفرع الرئيسي');
 
     const newCmp: MerchantComplaint = {
       id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: 'الآن',
-      merchantName: 'مخبز وشمسين للشامي الأصيل',
+      merchantName: userProfile?.storeName || 'مخبز وشمسين للشامي الأصيل',
       branch: branchName,
       orderNumber: complaintOrderNum.trim() || undefined,
       complaintType,

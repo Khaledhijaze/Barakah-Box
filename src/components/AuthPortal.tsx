@@ -78,7 +78,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 no-scrollbar"
     >
       {/* Header Container (Green) */}
-      <div className="bg-[#006948] p-8 text-white text-center relative overflow-hidden">
+      <div className="bg-[#006948] p-8 text-white text-center relative overflow-hidden shrink-0">
         {/* Close Button Inside Header */}
         <button
           onClick={onClose}
@@ -237,14 +237,15 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
           {/* Identification (Phone or Email) */}
           <div>
             <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wider">
-              {mode === 'admin' ? (isEn ? 'Admin Email' : 'البريد الإلكتروني') : (isEn ? 'Phone / Email' : 'رقم الهاتف أو البريد')}
+              {mode === 'admin' ? (isEn ? 'Admin Email' : 'البريد الإلكتروني للإدارة') : mode === 'consumer' ? (isEn ? 'Mobile Phone Number' : 'رقم الهاتف المحمول') : (isEn ? 'Phone / Email' : 'رقم الهاتف أو البريد')}
             </label>
             <input
               type={mode === 'admin' ? 'email' : 'text'}
+              inputMode={mode === 'consumer' ? 'numeric' : 'text'}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-4 focus:ring-[#006948]/5 outline-none transition-all"
-              placeholder={mode === 'admin' ? 'admin@barakah.sy' : '09xx xxx xxx'}
+              placeholder={mode === 'admin' ? 'admin@barakah.sy' : mode === 'consumer' ? '09xx xxx xxx' : '09xx xxx xxx'}
               required
             />
           </div>

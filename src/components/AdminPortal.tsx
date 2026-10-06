@@ -705,15 +705,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl flex flex-col gap-4 text-xs">
                 <h4 className="font-bold text-sm text-slate-900">تعديل نسبة عمولة {editingTier.category}</h4>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={newRateInput}
-                    onChange={(e) => setNewRateInput(Number(e.target.value))}
-                    className="w-full bg-slate-100 px-3 py-2 rounded-xl text-base font-bold text-slate-800"
-                  />
-                  <span className="font-bold text-slate-500">%</span>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={newRateInput}
+                      onChange={(e) => setNewRateInput(Number(e.target.value.replace(/\D/g, '')))}
+                      className="w-full bg-slate-100 px-3 py-2 rounded-xl text-base font-bold text-slate-800"
+                    />
+                    <span className="font-bold text-slate-500">%</span>
+                  </div>
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                   <button onClick={() => setEditingTier(null)} className="px-3 py-1.5 text-slate-600">إلغاء</button>
                   <button
@@ -864,18 +865,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <div className="flex flex-col gap-1">
                     <label className="font-bold">الهدف (Threshold):</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={editingReward.targetThreshold}
-                      onChange={(e) => setEditingReward({ ...editingReward, targetThreshold: Number(e.target.value) })}
+                      onChange={(e) => setEditingReward({ ...editingReward, targetThreshold: Number(e.target.value.replace(/\D/g, '')) })}
                       className="bg-slate-100 p-2 rounded-xl"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="font-bold">المكافأة (ل.س):</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={editingReward.rewardAmountSyp}
-                      onChange={(e) => setEditingReward({ ...editingReward, rewardAmountSyp: Number(e.target.value) })}
+                      onChange={(e) => setEditingReward({ ...editingReward, rewardAmountSyp: Number(e.target.value.replace(/\D/g, '')) })}
                       className="bg-slate-100 p-2 rounded-xl"
                     />
                   </div>

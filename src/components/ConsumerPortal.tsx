@@ -127,7 +127,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
   const [newTicketMessage, setNewTicketMessage] = useState('');
 
   // Active reservation voucher
-  const [isQrEnlarged, setIsQrEnlarged] = useState(false);
+  const [proofPhoto, setProofPhoto] = useState<string | null>(null);
   const [activeOrderVoucher, setActiveOrderVoucher] = useState({
     orderId: '#BB-9048',
     vendor: 'مخبز وشمسين للشامي الأصيل',
@@ -700,7 +700,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
             <div className="bg-[#f2f3ff] rounded-2xl p-5 border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-5">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-md border border-slate-200">
-                  <span className="material-symbols-outlined text-[36px] text-[#006948]">qr_code_2</span>
+                  <span className="material-symbols-outlined text-[36px] text-[#006948]">photo_camera</span>
                 </div>
                 <div>
                   <span className="text-xs font-bold text-slate-400 block font-mono">
@@ -711,36 +711,50 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
                 </div>
               </div>
 
-              {/* High-Visibility Large QR / PIN Area */}
-              <div className="bg-white p-6 rounded-[32px] border-4 border-[#006948]/10 text-center shadow-lg relative group">
-                <button 
-                  onClick={() => setIsQrEnlarged(true)}
-                  className="w-32 h-32 bg-slate-50 rounded-2xl flex items-center justify-center mb-3 mx-auto border-2 border-slate-200 overflow-hidden cursor-zoom-in relative"
-                >
-                   <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=BARAKAH-${activeOrderVoucher.orderId}-${activeOrderVoucher.pin}`} 
-                    alt="QR Code"
-                    className="w-full h-full object-contain p-2"
-                   />
-                   <div className="absolute inset-0 bg-[#006948]/0 hover:bg-[#006948]/5 transition-all flex items-center justify-center">
-                      <span className="material-symbols-outlined text-white opacity-0 hover:opacity-100 drop-shadow-md">zoom_in</span>
-                   </div>
-                </button>
-                <span className="text-[10px] text-slate-400 block font-bold uppercase">{tr.quickPin}</span>
-                <span className="text-3xl font-black font-mono tracking-[0.2em] text-[#006948] block mt-1">
-                  {activeOrderVoucher.pin}
-                </span>
+              {/* Proof of Delivery Photo Upload/Capture */}
+              <div className="bg-white p-4 rounded-3xl border-2 border-dashed border-[#006948]/20 text-center shadow-sm w-full md:w-64 relative group">
+                {proofPhoto ? (
+                  <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-50 border border-slate-200">
+                    <img src={proofPhoto} alt="Delivery Proof" className="w-full h-full object-cover" />
+                    <button 
+                      onClick={() => setProofPhoto(null)}
+                      className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      // Simulate photo capture
+                      setProofPhoto('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800');
+                      onShowToast(isEn ? 'Photo Proof Captured!' : 'تم التقاط صورة إثبات الاستلام!', 'photo_camera', 'success');
+                    }}
+                    className="w-full aspect-square bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-emerald-50 transition-all border border-slate-200 cursor-pointer group"
+                  >
+                    <span className="material-symbols-outlined text-[40px] text-slate-400 group-hover:text-[#006948]">add_a_photo</span>
+                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-[#006948]">
+                      {isEn ? 'Snap Proof Photo' : 'التقاط صورة إثبات الاستلام'}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Action Bar for this Order */}
             <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
               <button
-                onClick={() => setShowVoucherModal(true)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                onClick={() => {
+                  if (!proofPhoto) {
+                    onShowToast(isEn ? 'Please capture a proof photo first!' : 'يرجى التقاط صورة الإثبات أولاً!', 'warning', 'error');
+                    return;
+                  }
+                  onShowToast(isEn ? 'Receipt Confirmed via Photo Proof!' : 'تم تأكيد الاستلام عبر إثبات الصورة بنجاح!', 'verified', 'success');
+                }}
+                className={`px-4 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${proofPhoto ? 'bg-[#006948] text-white shadow-md' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}
               >
-                <span className="material-symbols-outlined text-[16px]">visibility</span>
-                <span>{tr.viewFullVoucher}</span>
+                <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
+                <span>{isEn ? 'Confirm Receipt' : 'تأكيد تملك واستلام السلة'}</span>
               </button>
 
               {/* Order-Linked Support CTA */}
@@ -1573,7 +1587,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
             className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden p-5 flex flex-col items-center text-center gap-4 border border-slate-200 animate-in fade-in zoom-in-95"
           >
             <div className="w-12 h-12 rounded-full bg-[#85f8c4] text-[#002114] flex items-center justify-center">
-              <span className="material-symbols-outlined text-[28px]">qr_code_2</span>
+              <span className="material-symbols-outlined text-[28px]">verified</span>
             </div>
             <div>
               <h4 className="text-lg font-bold text-[#131b2e]">
@@ -1631,43 +1645,6 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
           </div>
         </div>
       )}
-      {/* QR Code Enlargement Overlay */}
-      <AnimatePresence>
-        {isQrEnlarged && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsQrEnlarged(false)}
-            className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-white cursor-zoom-out"
-          >
-            <div className="bg-white p-8 rounded-[40px] shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
-               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=BARAKAH-${activeOrderVoucher.orderId}-${activeOrderVoucher.pin}`} 
-                alt="Enlarged QR Code"
-                className="w-64 h-64 sm:w-80 sm:h-80 object-contain"
-               />
-               <button 
-                onClick={() => setIsQrEnlarged(false)}
-                className="absolute -top-4 -right-4 w-10 h-10 bg-red-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer text-white"
-               >
-                  <span className="material-symbols-outlined">close</span>
-               </button>
-            </div>
-            <div className="mt-8 text-center" onClick={(e) => e.stopPropagation()}>
-               <h3 className="text-xl font-bold">{activeOrderVoucher.vendor}</h3>
-               <p className="text-white/60 font-mono mt-1">Order: {activeOrderVoucher.orderId}</p>
-               <div className="mt-4 text-4xl font-black tracking-[0.3em] bg-white/10 px-6 py-3 rounded-2xl border border-white/20">
-                  {activeOrderVoucher.pin}
-               </div>
-               <p className="mt-6 text-sm font-bold text-[#85f8c4] flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined">qr_code_scanner</span>
-                  {isEn ? 'Point the scanner at this code' : 'وجّه الماسح الضوئي نحو هذا الكود'}
-               </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
