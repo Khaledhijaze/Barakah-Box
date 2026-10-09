@@ -7,6 +7,7 @@ import { uploadFileToSupabase, verifyUserCredentials, registerUserInDb } from '.
 interface AuthPortalProps {
   onLoginSuccess: (profile: UserProfile) => void;
   onClose: () => void;
+  onShowToast?: (text: string, icon?: string, type?: 'success' | 'error' | 'info') => void;
   lang?: Language;
   defaultMode?: 'consumer' | 'partner' | 'admin';
 }
@@ -14,6 +15,7 @@ interface AuthPortalProps {
 export const AuthPortal: React.FC<AuthPortalProps> = ({
   onLoginSuccess,
   onClose,
+  onShowToast,
   lang = 'ar',
   defaultMode = 'consumer',
 }) => {
@@ -62,6 +64,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
           setTempProfile(profile);
           setShowOtpStep(true);
           // In a real app, this would trigger an SMS/Email
+          if (onShowToast) onShowToast(isEn ? 'Verification code sent: 8822' : 'تم إرسال رمز التحقق: 8822', 'sms', 'info');
           console.log("OTP Sent: 8822");
         } else {
           alert(isEn ? 'Invalid credentials or role!' : 'بيانات الدخول غير صحيحة أو الدور غير مطابق!');
@@ -89,6 +92,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         setTempProfile(newProfile);
         setTempPassword(mode === 'consumer' ? undefined : password);
         setShowOtpStep(true);
+        if (onShowToast) onShowToast(isEn ? 'Verification code sent: 8822' : 'تم إرسال رمز التحقق: 8822', 'sms', 'info');
         console.log("OTP Sent: 8822");
       }
     } catch (err) {
@@ -377,15 +381,15 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
           {/* Identification (Phone or Email) */}
           <div>
             <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wider">
-              {mode === 'admin' ? (isEn ? 'Admin Email' : 'البريد الإلكتروني للإدارة') : mode === 'consumer' ? (isEn ? 'Mobile Phone Number' : 'رقم الهاتف المحمول') : (isEn ? 'Phone / Email' : 'رقم الهاتف أو البريد')}
+              {mode === 'admin' ? (isEn ? 'Admin Email' : 'البريد الإلكتروني للإدارة') : (isEn ? 'Mobile Phone Number' : 'رقم الهاتف المحمول')}
             </label>
             <input
               type={mode === 'admin' ? 'email' : 'text'}
-              inputMode={mode === 'consumer' ? 'numeric' : 'text'}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              inputMode={mode === 'admin' ? 'email' : 'numeric'}
+              value={mode === 'admin' ? email : phoneNumber}
+              onChange={(e) => mode === 'admin' ? setEmail(e.target.value) : setPhone(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-4 focus:ring-[#006948]/5 outline-none transition-all"
-              placeholder={mode === 'admin' ? 'admin@barakah.sy' : mode === 'consumer' ? '09xx xxx xxx' : '09xx xxx xxx'}
+              placeholder={mode === 'admin' ? 'admin@barakah.sy' : '09xx xxx xxx'}
               required
             />
           </div>

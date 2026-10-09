@@ -345,6 +345,7 @@ export default function App() {
               <AuthPortal 
                 onLoginSuccess={handleLoginSuccess} 
                 onClose={() => setCurrentAccount('consumer')}
+                onShowToast={showToast}
                 lang={lang} 
                 defaultMode={currentAccount === 'admin' ? 'admin' : currentAccount === 'merchant' ? 'partner' : 'consumer'} 
               />
@@ -503,7 +504,7 @@ export default function App() {
               className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md"
             >
               <div className="relative w-full max-w-md">
-                <AuthPortal onLoginSuccess={handleLoginSuccess} onClose={() => setIsAuthModalOpen(false)} lang={lang} />
+                <AuthPortal onLoginSuccess={handleLoginSuccess} onClose={() => setIsAuthModalOpen(false)} onShowToast={showToast} lang={lang} />
               </div>
             </motion.div>
           )}

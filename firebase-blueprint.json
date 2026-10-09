@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with roles (consumer, merchant, captain, admin).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["consumer", "merchant", "captain", "admin"] },
+        "phoneNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "storeName": { "type": "string" },
+        "storeCategory": { "type": "string" },
+        "licenseNumber": { "type": "string" },
+        "licenseUrl": { "type": "string" },
+        "location": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "role"]
+    },
+    "BarakahBox": {
+      "title": "BarakahBox",
+      "description": "Mystery surplus food box available for purchase.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "vendor": { "type": "string" },
+        "vendor_en": { "type": "string" },
+        "vendorCategory": { "type": "string" },
+        "title": { "type": "string" },
+        "originalPrice": { "type": "number" },
+        "discountedPrice": { "type": "number" },
+        "stockLeft": { "type": "number" },
+        "pickupStart": { "type": "string" },
+        "pickupEnd": { "type": "string" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["id", "vendor", "title", "originalPrice", "discountedPrice", "stockLeft"]
+    },
+    "OrderItem": {
+      "title": "OrderItem",
+      "description": "Customer order for a food box.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "boxTitle": { "type": "string" },
+        "status": { "type": "string" },
+        "price": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "securityPin": { "type": "string" },
+        "orderPlacedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "customerPhone", "boxTitle", "status", "price"]
+    },
+    "WalletRecord": {
+      "title": "WalletRecord",
+      "description": "User digital wallet balance.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "balanceSyp": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "balanceSyp"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "UserProfile",
+      "description": "Collection of all user profiles."
+    },
+    "boxes": {
+      "schema": "BarakahBox",
+      "description": "Available surplus boxes."
+    },
+    "orders": {
+      "schema": "OrderItem",
+      "description": "Customer orders."
+    },
+    "wallets": {
+      "schema": "WalletRecord",
+      "description": "User wallet balances."
+    }
+  }
+}
