@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { OrderItem, DisputeIncident, CommissionTier, AuditLog, SyrianGovernorate, SupportTicket, Language, RewardRule } from '../types';
+import React, { useState, useEffect } from 'react';
+import { OrderItem, DisputeIncident, CommissionTier, AuditLog, SyrianGovernorate, SupportTicket, Language, RewardRule, UserProfile } from '../types';
 import { OrderLifecycleInspector } from './OrderLifecycleInspector';
 import { t } from '../data/translations';
+import { fetchGovernoratesFromDb, fetchSupportTicketsFromDb } from '../db/supabaseClient';
 
 interface AdminPortalProps {
   orders: OrderItem[];
@@ -9,25 +10,31 @@ interface AdminPortalProps {
   commissions: CommissionTier[];
   auditLogs: AuditLog[];
   rewardRules: RewardRule[];
+  supportTickets: SupportTicket[];
+  partners: UserProfile[];
   onShowToast: (text: string, icon?: string, type?: 'success' | 'error' | 'info') => void;
   onRefundRescuer: (amount: number) => void;
   onUpdateCommissionRate: (tierId: string, newRate: number) => void;
   onSaveRewardRule: (rule: RewardRule) => void;
   onIssueBonus: (amount: number, reason: string) => void;
+  onUpdateUserPassword: (userId: string, newPass: string) => void;
   lang?: Language;
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   orders,
-  disputes: _disputes,
+  disputes,
   commissions,
   auditLogs,
   rewardRules,
+  supportTickets,
+  partners,
   onShowToast,
   onRefundRescuer,
   onUpdateCommissionRate,
   onSaveRewardRule,
   onIssueBonus,
+  onUpdateUserPassword,
   lang = 'ar',
 }) => {
   const isEn = lang === 'en';
@@ -36,7 +43,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [selectedGovernorate, setSelectedGovernorate] = useState<SyrianGovernorate>('الكل');
 
   // Inspector order target
-  const [inspectorOrderId, setInspectorOrderId] = useState<string>('9048');
+  const [inspectorOrderId, setInspectorOrderId] = useState<string>('');
+
+  useEffect(() => {
+    if (orders.length > 0 && !inspectorOrderId) {
+      setInspectorOrderId(orders[0].id);
+    }
+  }, [orders, inspectorOrderId]);
 
   // Commission Edit
   const [editingTier, setEditingTier] = useState<CommissionTier | null>(null);
@@ -50,98 +63,32 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [bonusReason, setBonusReason] = useState<string>('');
   const [bonusCustomer, setBonusCustomer] = useState<string>('رامي السعيد');
 
-  // Centralized Support Tickets & Dispute Queue State (benchmarked to Saudi Barakah standards)
-  const [ticketQueue, setTicketQueue] = useState<SupportTicket[]>([
-    {
-      id: 'TKT-AUTO-9038',
-      createdAt: 'اليوم، 11:20 ص',
-      customerName: 'سامر الكردي',
-      customerPhone: '0988-223344',
-      orderId: '9038',
-      vendorName: 'حلويات الشهباء',
-      governorate: 'حلب',
-      category: 'المتجر كان مغلقاً عند الوصول',
-      issueType: 'store_closed',
-      subject: 'إغلاق الفرع خلال نافذة الاستلام',
-      message: 'وصل المنقذ لمحل حلويات الشهباء بالجميلية وكان الفرع مغلقاً.',
-      status: 'auto_refunded',
-      autoRefundTriggered: true,
-      refundAmount: 22000,
-      adminDecision: 'approved_refund',
-      resolutionSpeedMinutes: 0.3,
-      response: 'تم استرداد 22,000 ل.س تلقائياً إلى محفظة المنقذ.',
-    },
-    {
-      id: 'TKT-9941',
-      createdAt: 'اليوم، 10:45 ص',
-      customerName: 'عمر كمال الدين',
-      customerPhone: '0933-211445',
-      orderId: '9941',
-      vendorName: 'شاورما السيران - القصاع',
-      governorate: 'دمشق',
-      category: 'محتويات السلة ناقصة، تالفة، أو منتهية الصلاحية',
-      issueType: 'item_damaged',
-      subject: 'نقص في محتويات سلة الشاورما وتلف التغليف',
-      message: 'السلة وصلت بوجبة واحدة فقط بدل وجبتين والعلبة مفتوحة.',
-      proofPhotoUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuBogqdOkcG5wFAYzC7n0vv5j0cz1fj6kuGpluS4FIXWVSvHTxevhCIrsKcQ5KZSX6dnwlLJGn0D2zwfjXqSXWYjUdZug78LptthVj-YGvTHfsCQq9tLntTBuXTQ1qPcdmv3fVln--3HHeh1M9BBYyRA3XR339W9J4psLLOFTg2z0265NXI9_ek-kNc6NvoTxX4K_IKvY_28obeDdAqGEDIxtMvwJi2e22msQzBBHixgieGNNsqynCpZ',
-      status: 'open',
-      refundAmount: 35500,
-      adminDecision: 'pending',
-    },
-    {
-      id: 'TKT-9045',
-      createdAt: 'أمس، 09:15 م',
-      customerName: 'رامي السعيد',
-      customerPhone: '0944-123456',
-      orderId: '9045',
-      vendorName: 'مخبز وشمسين للشامي الأصيل',
-      governorate: 'دمشق',
-      category: 'مشكلة في التوصيل أو السائق',
-      issueType: 'driver_issue',
-      subject: 'تأخر كابتن التوصيل أكثر من 40 دقيقة',
-      message: 'الكابتن لم يصل في الوقت المحدد واستلمت الخبز بارداً.',
-      status: 'open',
-      refundAmount: 16000,
-      adminDecision: 'pending',
-    },
-    {
-      id: 'TKT-NOSHOW-8812',
-      createdAt: 'أمس، 08:30 م',
-      customerName: 'طارق الزين',
-      customerPhone: '0955-667788',
-      orderId: '8812',
-      vendorName: 'مخبز وشمسين للشامي الأصيل',
-      governorate: 'دمشق',
-      category: 'استفسار عام',
-      issueType: 'general',
-      subject: 'مطالبة تخلف المنقذ (Rescuer No-Show)',
-      message: 'أبلغ المتجر عن تخلف المنقذ عن الحضور وطالب بصرف حقوقه.',
-      status: 'resolved',
-      refundAmount: 13600,
-      adminDecision: 'approved_refund',
-      resolutionSpeedMinutes: 2.1,
-      response: 'تم تعويض المتجر وصرف 13,600 ل.س لمحفظته فورياً وتوجيه السلة لبنك حفظ النعمة.',
-    },
-  ]);
+  // Unified Ticket Queue
+  const [ticketQueue, setTicketQueue] = useState<SupportTicket[]>([]);
 
   // Ticket Queue Filter
   const [ticketCategoryFilter, setTicketCategoryFilter] = useState<
     'all' | 'pending_auto_refund' | 'food_quality_dispute' | 'no_show_verification' | 'general_inquiry'
   >('all');
 
-  const governorates: SyrianGovernorate[] = [
-    'الكل',
-    'دمشق',
-    'ريف دمشق',
-    'حلب',
-    'حمص',
-    'حماة',
-    'اللاذقية',
-    'طرطوس',
-    'درعا',
-    'السويداء',
-  ];
+  const [governorates, setGovernorates] = useState<SyrianGovernorate[]>(['الكل']);
+
+  useEffect(() => {
+    const loadGovs = async () => {
+      const data = await fetchGovernoratesFromDb();
+      const names = ['الكل' as SyrianGovernorate, ...data.map(g => (isEn ? g.name_en : g.name_ar) as SyrianGovernorate)];
+      setGovernorates(names);
+    };
+    loadGovs();
+  }, [isEn]);
+
+  useEffect(() => {
+    const loadTickets = async () => {
+      const data = await fetchSupportTicketsFromDb();
+      setTicketQueue(data);
+    };
+    loadTickets();
+  }, []);
 
   const filteredTickets = ticketQueue.filter((t) => {
     const matchGov = selectedGovernorate === 'الكل' || t.governorate === selectedGovernorate;
@@ -222,6 +169,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     onShowToast(`تم توجيه إنذار رسمي وغرامة تشغيلية على متجر (${ticket.vendorName})`, 'warning', 'error');
   };
 
+  const totalGmv = orders.reduce((acc, o) => acc + o.price, 0);
+  const totalNet = orders.reduce((acc, o) => acc + o.merchantNet, 0);
+  const totalAuditFailed = auditLogs.filter(a => a.status === 'failed').length;
+  const integrityRate = auditLogs.length > 0 ? (100 - (totalAuditFailed / auditLogs.length) * 100).toFixed(1) : '100';
+
   return (
     <div dir={isEn ? 'ltr' : 'rtl'} className="w-full flex flex-col gap-6">
       {/* Admin Profile & Governance Header Bar */}
@@ -250,7 +202,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             <span className="material-symbols-outlined text-[#0058be] text-[18px]">query_stats</span>
             <div>
               <span className="text-[10px] text-slate-400 block font-bold">إجمالي تداول سوريا (GMV):</span>
-              <span className="text-sm font-bold text-slate-900 font-mono">142,500,000 ل.س</span>
+              <span className="text-sm font-bold text-slate-900 font-mono">{totalGmv.toLocaleString('ar-SY')} ل.س</span>
             </div>
           </div>
 
@@ -258,7 +210,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             <span className="material-symbols-outlined text-[#006948] text-[18px]">verified</span>
             <div>
               <span className="text-[10px] text-slate-400 block font-bold">معدل النزاهة الوطني:</span>
-              <span className="text-sm font-bold text-[#006948] font-mono">99.8%</span>
+              <span className="text-sm font-bold text-[#006948] font-mono">{integrityRate}%</span>
             </div>
           </div>
         </div>
@@ -535,7 +487,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
-                  {filteredTickets.map((t) => (
+                  {filteredTickets.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-20 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="material-symbols-outlined text-[48px] text-slate-200">folder_off</span>
+                          <div className="text-slate-400 font-bold">{isEn ? 'No active tickets in this category' : 'لا توجد تذاكر نشطة في هذا التصنيف حالياً'}</div>
+                          <p className="text-[10px] text-slate-300 max-w-[240px] mx-auto">
+                            {isEn ? 'System integrity check passed. No pending disputes requiring manual intervention.' : 'تم فحص سلامة النظام بنجاح. لا توجد نزاعات معلقة تتطلب تدخل بشري.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredTickets.map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-3 px-3">
                         <span className="font-mono font-bold text-[#006948] block">{t.id}</span>
@@ -645,8 +609,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div className="p-5 rounded-2xl bg-[#f5fff7] border border-[#85f8c4]">
-              <span className="text-xs text-[#006948] font-bold block">مجموع حصص الشركاء (85%)</span>
-              <span className="text-2xl font-bold text-[#006948] font-mono mt-1 block">121,125,000 ل.س</span>
+              <span className="text-xs text-[#006948] font-bold block">مجموع حصص الشركاء (صافي)</span>
+              <span className="text-2xl font-bold text-[#006948] font-mono mt-1 block">{totalNet.toLocaleString('ar-SY')} ل.س</span>
               <span className="text-[11px] text-slate-500 mt-1 block">محولة إلى محافظ الشركاء المسجلين</span>
             </div>
 
@@ -935,32 +899,30 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {[
-                  { id: 1, name: "مخبز وشمسين", owner: "سامي عثمان", gov: "دمشق", phone: "011-9048", status: "نشط" },
-                  { id: 2, name: "حلويات الشهباء", owner: "محمد حلب", gov: "حلب", phone: "021-5544", status: "نشط" },
-                  { id: 3, name: "سوبر ماركت الياسمين", owner: "هدى أحمد", gov: "ريف دمشق", phone: "011-4433", status: "معلق" },
-                ].map(p => (
+                {partners.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50">
                     <td className="py-3 px-4">
-                      <span className="font-bold block">{p.name}</span>
-                      <span className="text-[10px] text-slate-400">المفوض: {p.owner}</span>
-                      <div className="mt-1 flex items-center gap-1 text-[10px] text-[#006948] font-bold cursor-pointer hover:underline">
-                        <span className="material-symbols-outlined text-[14px]">description</span>
-                        <span>عرض وثائق المتجر الموثقة</span>
-                      </div>
+                      <span className="font-bold block">{p.storeName || p.name}</span>
+                      <span className="text-[10px] text-slate-400">المفوض: {p.name}</span>
+                      {p.licenseUrl && (
+                        <a href={p.licenseUrl} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-1 text-[10px] text-[#006948] font-bold cursor-pointer hover:underline">
+                          <span className="material-symbols-outlined text-[14px]">description</span>
+                          <span>عرض وثائق المتجر الموثقة</span>
+                        </a>
+                      )}
                     </td>
-                    <td className="py-3 px-4">{p.gov}</td>
-                    <td className="py-3 px-4">{p.phone}</td>
+                    <td className="py-3 px-4">{p.location?.address || 'N/A'}</td>
+                    <td className="py-3 px-4">{p.phoneNumber}</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === 'نشط' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                        {p.status}
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800`}>
+                        نشط
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center">
                       <button 
                         onClick={() => {
                           const newPass = prompt(isEn ? 'Enter New Password:' : 'أدخل كلمة المرور الجديدة:');
-                          if (newPass) onShowToast(isEn ? `Password reset for ${p.name}` : `تم إعادة ضبط كلمة المرور لـ ${p.name}`, 'lock_reset');
+                          if (newPass) onUpdateUserPassword(p.id, newPass);
                         }}
                         className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-bold hover:bg-slate-50 transition-colors"
                       >

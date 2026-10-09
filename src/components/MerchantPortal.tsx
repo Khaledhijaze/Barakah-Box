@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OrderItem, MerchantComplaint, Language, UserProfile } from '../types';
 import { t } from '../data/translations';
+import { fetchMerchantComplaintsFromDb } from '../db/supabaseClient';
 
 interface MerchantPortalProps {
   orders: OrderItem[];
@@ -43,8 +44,8 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
   const [publishedAlert, setPublishedAlert] = useState(false);
 
   // Verification state
-  const [targetOrderId, setTargetOrderId] = useState<string>('9045');
-  const [otpDigits, setOtpDigits] = useState<string[]>(['8', '4', '1', '9']);
+  const [targetOrderId, setTargetOrderId] = useState<string>('');
+  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '']);
   const [verificationSuccess, setVerificationSuccess] = useState<string | null>(null);
 
   // Order Issue Modal Target
@@ -54,37 +55,25 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
   >('تخلف الزبون عن الاستلام');
 
   // Merchant Complaints State
-  const [merchantComplaints, setMerchantComplaints] = useState<MerchantComplaint[]>([
-    {
-      id: 'CMP-4012',
-      createdAt: 'اليوم، 10:15 ص',
-      merchantName: 'مخبز وشمسين للشامي الأصيل',
-      branch: 'فرع دمشق (المزة)',
-      orderNumber: '#BB-9045',
-      customerName: 'رامي السعيد',
-      complaintType: 'تأخر كابتن التوصيل',
-      priority: 'عاجل',
-      description: 'السلة تم تجهيزها منذ أكثر من 25 دقيقة والكابتن لم يصل بعد لاستلامها.',
-      status: 'تم التدخل الميداني',
-      adminNotes: 'تم التواصل مع الكابتن أحمد وتحديد موقعه بدوار المواساة، وصل واستلم السلة وتم حفظ حق المتجر.',
-    },
-    {
-      id: 'CMP-3990',
-      createdAt: 'أمس، 09:30 م',
-      merchantName: 'مخبز وشمسين للشامي الأصيل',
-      branch: 'فرع دمشق (المزة)',
-      orderNumber: '#BB-8812',
-      customerName: 'سامر الكردي',
-      complaintType: 'تخلف الزبون عن الاستلام',
-      priority: 'عاجل',
-      description: 'انتهت نافذة الاستلام المحددة والزبون لم يحضر لاستلام سلة الخبز الطازج.',
-      status: 'تمت التسوية والتعويض',
-      isNoShowClaim: true,
-      payoutReleased: true,
-      payoutAmount: 13600,
-      adminNotes: 'تم صرف 100% من حصة المتجر (13,600 ل.س) لمحفظته فورياً وتوجيه السلة لبنك حفظ النعمة.',
-    },
-  ]);
+  const [merchantComplaints, setMerchantComplaints] = useState<MerchantComplaint[]>([]);
+  const [isLoadingComplaints, setIsLoadingComplaints] = useState(false);
+
+  useEffect(() => {
+    const loadComplaints = async () => {
+      setIsLoadingComplaints(true);
+      const data = await fetchMerchantComplaintsFromDb(userProfile?.storeName);
+      setMerchantComplaints(data);
+      setIsLoadingComplaints(false);
+    };
+    loadComplaints();
+  }, [userProfile?.storeName]);
+
+  // Set default target order if available
+  useEffect(() => {
+    if (orders.length > 0 && !targetOrderId) {
+      setTargetOrderId(orders[0].id);
+    }
+  }, [orders, targetOrderId]);
 
   // New Complaint Form State
   const [complaintType, setComplaintType] = useState<MerchantComplaint['complaintType']>('تخلف الزبون عن الاستلام');
@@ -113,15 +102,15 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
 
   // 1-Click Customer No-Show Payout Claim
   const handleClaimCustomerNoShow = (order: OrderItem) => {
-    const payout = order.merchantNet || 13600;
+    const payout = order.merchantNet || (order.price * 0.85);
     onUpdateMerchantWallet(payout);
 
-    const branchName = userProfile?.location?.address || (isEn ? 'Main Branch' : 'الفرع الرئيسي');
+    const branchName = userProfile?.location?.address || (isEn ? 'Verified Branch' : 'الفرع الموثق');
 
     const newCmp: MerchantComplaint = {
       id: `CMP-NOSHOW-${Math.floor(1000 + Math.random() * 9000)}`,
-      createdAt: 'الآن (معتمد آلياً)',
-      merchantName: userProfile?.storeName || 'مخبز وشمسين للشامي الأصيل',
+      createdAt: new Date().toISOString(),
+      merchantName: userProfile?.storeName || 'Barakah Partner',
       branch: branchName,
       orderNumber: `#BB-${order.id}`,
       customerName: order.customerName,
@@ -147,12 +136,12 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
       return;
     }
 
-    const branchName = userProfile?.location?.address || (isEn ? 'Main Branch' : 'الفرع الرئيسي');
+    const branchName = userProfile?.location?.address || (isEn ? 'Verified Branch' : 'الفرع الموثق');
 
     const newCmp: MerchantComplaint = {
       id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
-      createdAt: 'الآن',
-      merchantName: userProfile?.storeName || 'مخبز وشمسين للشامي الأصيل',
+      createdAt: new Date().toISOString(),
+      merchantName: userProfile?.storeName || 'Barakah Partner',
       branch: branchName,
       orderNumber: complaintOrderNum.trim() || undefined,
       complaintType,
@@ -166,6 +155,10 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
     setComplaintDesc('');
     onShowToast(`تم رفع الشكوى #${newCmp.id} للإدارة المركزية بنجاح!`, 'report_problem', 'success');
   };
+
+  const soldTodayCount = orders.filter(o => o.status === 'delivered').length;
+  const totalRevenueToday = orders.reduce((acc, o) => o.status === 'delivered' ? acc + o.merchantNet : acc, 0);
+  const activeOrdersCount = orders.filter(o => o.status === 'pending' || o.status === 'in_transit').length;
 
   return (
     <div dir={isEn ? 'ltr' : 'rtl'} className="w-full flex flex-col gap-6">
@@ -182,9 +175,9 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
               </span>
               <span className="text-xs text-slate-500 font-semibold">{tr.partnerPortalView}</span>
             </div>
-            <h1 className="text-xl font-bold text-[#131b2e] mt-0.5">{userProfile?.storeName || 'مخبز وشمسين للشامي الأصيل'}</h1>
+            <h1 className="text-xl font-bold text-[#131b2e] mt-0.5">{userProfile?.storeName || (isEn ? 'Merchant Portal' : 'بوابة الشريك')}</h1>
             <p className="text-xs text-slate-500">
-              {isEn ? 'Business License: ' : 'ترخيص تجاري رقم: '} {userProfile?.licenseNumber || 'SY-DAM-9921'} • {userProfile?.location?.address || (isEn ? 'Damascus / Mazzeh' : 'فرع دمشق / المزة')}
+              {isEn ? 'License ID: ' : 'ترخيص تجاري رقم: '} {userProfile?.licenseNumber || 'SY-LIC-PENDING'} • {userProfile?.location?.address || (isEn ? 'Verified Branch' : 'الفرع الموثق')}
             </p>
           </div>
         </div>
@@ -327,20 +320,20 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
           <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
               <span className="text-xs text-slate-500 font-bold block">سلال تم بيعها اليوم</span>
-              <span className="text-2xl font-bold text-[#131b2e] mt-1 block">19 سلة</span>
-              <span className="text-xs text-[#006948] font-bold mt-1 block">+32% عن الأمس</span>
+              <span className="text-2xl font-bold text-[#131b2e] mt-1 block">{soldTodayCount} سلة</span>
+              <span className="text-[10px] text-[#006948] font-bold mt-1 block">تحديث لحظي</span>
             </div>
 
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
               <span className="text-xs text-slate-500 font-bold block">إجمالي إيراد اليوم</span>
-              <span className="text-2xl font-bold text-[#855300] font-mono mt-1 block">299,000 ل.س</span>
-              <span className="text-xs text-amber-700 font-bold mt-1 block">جاهز للتسوية الأسبوعية</span>
+              <span className="text-2xl font-bold text-[#855300] font-mono mt-1 block">{totalRevenueToday.toLocaleString('ar-SY')} ل.س</span>
+              <span className="text-[10px] text-amber-700 font-bold mt-1 block">جاهز للتسوية الأسبوعية</span>
             </div>
 
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
               <span className="text-xs text-slate-500 font-bold block">طلبات بانتظار الاستلام</span>
-              <span className="text-2xl font-bold text-slate-900 mt-1 block">3 طلبات نشطة</span>
-              <span className="text-xs text-[#006948] font-bold mt-1 block">نافذة الاستلام جارية الآن</span>
+              <span className="text-2xl font-bold text-slate-900 mt-1 block">{activeOrdersCount} طلبات نشطة</span>
+              <span className="text-[10px] text-[#006948] font-bold mt-1 block">نافذة الاستلام جارية الآن</span>
             </div>
 
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
@@ -571,11 +564,12 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
                   <input
                     key={i}
                     type="text"
+                    inputMode="numeric"
                     maxLength={1}
                     value={d}
                     onChange={(e) => {
                       const copy = [...otpDigits];
-                      copy[i] = e.target.value;
+                      copy[i] = e.target.value.replace(/\D/g, '');
                       setOtpDigits(copy);
                     }}
                     className="w-12 h-12 rounded-xl bg-white text-center font-bold text-lg text-slate-900 border border-slate-300 shadow-sm"
@@ -637,64 +631,72 @@ export const MerchantPortal: React.FC<MerchantPortalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800">
-                {orders.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-3 font-bold font-mono text-[#006948]">#BB-{o.id}</td>
-                    <td className="py-3 px-3 font-bold">{o.customerName}</td>
-                    <td className="py-3 px-3">{o.boxTitle}</td>
-                    <td className="py-3 px-3">
-                      <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg text-[10px]">
-                        {o.paymentMethod}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-bold text-[#006948]">{o.price.toLocaleString('ar-SY')} ل.س</span>
-                      <span className="block text-[10px] text-slate-400">صافي: {o.merchantNet.toLocaleString('ar-SY')} ل.س</span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          o.status === 'delivered'
-                            ? 'bg-emerald-100 text-emerald-800'
+                {orders.length > 0 ? (
+                  orders.map((o) => (
+                    <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-3 font-bold font-mono text-[#006948]">#BB-{o.id}</td>
+                      <td className="py-3 px-3 font-bold">{o.customerName}</td>
+                      <td className="py-3 px-3">{o.boxTitle}</td>
+                      <td className="py-3 px-3">
+                        <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg text-[10px]">
+                          {o.paymentMethod}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-[#006948]">{o.price.toLocaleString('ar-SY')} ل.س</span>
+                        <span className="block text-[10px] text-slate-400">صافي: {o.merchantNet.toLocaleString('ar-SY')} ل.س</span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            o.status === 'delivered'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : o.status === 'in_transit'
+                              ? 'bg-amber-100 text-amber-800'
+                              : o.status === 'cancelled'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {o.status === 'delivered'
+                            ? 'مكتمل ومسوى ✓'
                             : o.status === 'in_transit'
-                            ? 'bg-amber-100 text-amber-800'
+                            ? 'جاري التوصيل'
                             : o.status === 'cancelled'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}
-                      >
-                        {o.status === 'delivered'
-                          ? 'مكتمل ومسوى ✓'
-                          : o.status === 'in_transit'
-                          ? 'جاري التوصيل'
-                          : o.status === 'cancelled'
-                          ? 'ملغي / No-Show'
-                          : 'بانتظار الاستلام'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            setActiveSubTab('verification');
-                            setTargetOrderId(o.id);
-                          }}
-                          className="px-2.5 py-1 bg-[#006948] hover:bg-[#00855d] text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors shadow-2xs"
-                        >
-                          إثبات وتسليم
-                        </button>
+                            ? 'ملغي / No-Show'
+                            : 'بانتظار الاستلام'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              setActiveSubTab('verification');
+                              setTargetOrderId(o.id);
+                            }}
+                            className="px-2.5 py-1 bg-[#006948] hover:bg-[#00855d] text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors shadow-2xs"
+                          >
+                            إثبات وتسليم
+                          </button>
 
-                        {/* Report Issue with Order Button */}
-                        <button
-                          onClick={() => setOrderIssueTarget(o)}
-                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
-                        >
-                          إبلاغ عن مشكلة
-                        </button>
-                      </div>
+                          {/* Report Issue with Order Button */}
+                          <button
+                            onClick={() => setOrderIssueTarget(o)}
+                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                          >
+                            إبلاغ عن مشكلة
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400 italic">
+                      {isEn ? 'No orders received for your store today.' : 'لا يوجد طلبات مسجلة لمتجرك اليوم حتى الآن.'}
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

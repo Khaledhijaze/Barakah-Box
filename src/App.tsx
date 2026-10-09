@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { AccountType, AppScreen, SyrianGovernorate, OrderItem, DisputeIncident, CommissionTier, AuditLog, Language, RewardRule, UserProfile } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AccountType, AppScreen, SyrianGovernorate, OrderItem, DisputeIncident, CommissionTier, AuditLog, Language, RewardRule, UserProfile, BarakahBox, SupportTicket } from './types';
 import { Navbar } from './components/Navbar';
 import { ConsumerPortal } from './components/ConsumerPortal';
 import { MerchantPortal } from './components/MerchantPortal';
@@ -15,12 +15,23 @@ import { ImpactReport } from './components/ImpactReport';
 import { WalletTopupModal } from './components/WalletTopupModal';
 import { PayoutModal } from './components/PayoutModal';
 import { AuthPortal } from './components/AuthPortal';
-import { DevTools } from './components/DevTools';
 import { Toast, ToastMessage } from './components/Toast';
-import { INITIAL_BOXES, INITIAL_ORDERS, INITIAL_DISPUTES, INITIAL_COMMISSIONS, INITIAL_AUDIT_LOGS, INITIAL_REWARD_RULES } from './data/mockData';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { resolveLocationFromCoords } from './data/geographyData';
 import { t as translations } from './data/translations';
-import { executeSecurePayout } from './db/supabaseClient';
+import { 
+  executeSecurePayout, 
+  fetchOrdersFromDb, 
+  fetchDisputesFromDb, 
+  fetchCommissionsFromDb, 
+  fetchAuditLogsFromDb, 
+  fetchRewardRulesFromDb,
+  fetchBoxesFromDb,
+  fetchUserWalletBalance,
+  fetchSupportTicketsFromDb,
+  fetchUsersFromDb,
+  updateUserPassword
+} from './db/supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function App() {
@@ -31,8 +42,9 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('marketplace-catalog');
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
-  // GLOBAL GPS & AUTO-LOCATION STATE (Unified for Rescuer)
+  // GLOBAL GPS & AUTO-LOCATION STATE
   const [detectedLocation, setDetectedLocation] = useState<{
     lat: number;
     lng: number;
@@ -42,6 +54,71 @@ export default function App() {
     dist_en: string;
   } | null>(null);
   const [isGpsLoading, setIsGpsLoading] = useState(false);
+
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const showToast = useCallback((text: string, icon = 'check_circle', type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Date.now().toString();
+    setToast({ id, text, icon, type });
+    setTimeout(() => {
+      setToast((current) => (current?.id === id ? null : current));
+    }, 3800);
+  }, []);
+
+  // Shared platform data from DB
+  const [boxes, setBoxes] = useState<BarakahBox[]>([]);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [disputes, setDisputes] = useState<DisputeIncident[]>([]);
+  const [commissions, setCommissions] = useState<CommissionTier[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [rewardRules, setRewardRules] = useState<RewardRule[]>([]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [partners, setPartners] = useState<UserProfile[]>([]);
+
+  // Wallets
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [merchantWalletBalance, setMerchantWalletBalance] = useState<number>(0);
+  const [driverWalletBalance, setDriverWalletBalance] = useState<number>(0);
+
+  const [isTopupOpen, setIsTopupOpen] = useState<boolean>(false);
+  const [isPayoutOpen, setIsPayoutOpen] = useState<boolean>(false);
+
+  const isEn = lang === 'en';
+
+  /**
+   * Universal Data Loader (Real Supabase Integration)
+   */
+  const refreshAppData = useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const [o, d, c, a, r, b, t, p] = await Promise.all([
+        isLoggedIn ? fetchOrdersFromDb(authRole === 'merchant' ? 'merchant' : authRole === 'consumer' ? 'consumer' : undefined, userProfile?.storeName || userProfile?.phoneNumber) : Promise.resolve([]),
+        isLoggedIn && authRole === 'admin' ? fetchDisputesFromDb() : Promise.resolve([]),
+        isLoggedIn && authRole === 'admin' ? fetchCommissionsFromDb() : Promise.resolve([]),
+        isLoggedIn && authRole === 'admin' ? fetchAuditLogsFromDb() : Promise.resolve([]),
+        fetchRewardRulesFromDb(),
+        fetchBoxesFromDb(),
+        isLoggedIn ? fetchSupportTicketsFromDb() : Promise.resolve([]),
+        isLoggedIn && authRole === 'admin' ? fetchUsersFromDb('merchant') : Promise.resolve([])
+      ]);
+      setOrders(o);
+      setDisputes(d);
+      setCommissions(c);
+      setAuditLogs(a);
+      setRewardRules(r);
+      setBoxes(b);
+      setSupportTickets(t);
+      setPartners(p);
+    } catch (err) {
+      console.error("Error refreshing data:", err);
+      showToast(isEn ? 'Connection to database lost' : 'فقد الاتصال بقاعدة البيانات الرئيسية', 'cloud_off', 'error');
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [isLoggedIn, authRole, userProfile, isEn, showToast]);
+
+  useEffect(() => {
+    refreshAppData();
+  }, [refreshAppData]);
 
   const handleAutoDetectLocation = () => {
     setIsGpsLoading(true);
@@ -58,7 +135,6 @@ export default function App() {
           showToast(translations[lang].gpsSuccess, 'my_location', 'success');
         },
         () => {
-          // Fallback to Damascus Center
           const lat = 33.5138, lng = 36.2765;
           const resolved = resolveLocationFromCoords(lat, lng);
           setDetectedLocation({ lat, lng, ...resolved });
@@ -73,42 +149,14 @@ export default function App() {
     }
   };
 
-  // Auto-detect on mount
   useEffect(() => {
     handleAutoDetectLocation();
   }, []);
 
-  // Sync document root dir and lang attribute
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl';
   }, [lang]);
-
-  // Shared platform data across Syria
-  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_ORDERS);
-  const [disputes, setDisputes] = useState<DisputeIncident[]>(INITIAL_DISPUTES);
-  const [commissions, setCommissions] = useState<CommissionTier[]>(INITIAL_COMMISSIONS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
-  const [rewardRules, setRewardRules] = useState<RewardRule[]>(INITIAL_REWARD_RULES);
-
-  // Wallets
-  const [walletBalance, setWalletBalance] = useState<number>(45000);
-  const [merchantWalletBalance, setMerchantWalletBalance] = useState<number>(420000);
-  const [driverWalletBalance, setDriverWalletBalance] = useState<number>(18500);
-
-  const [isTopupOpen, setIsTopupOpen] = useState<boolean>(false);
-  const [isPayoutOpen, setIsPayoutOpen] = useState<boolean>(false);
-  const [toast, setToast] = useState<ToastMessage | null>(null);
-
-  const isEn = lang === 'en';
-
-  const showToast = (text: string, icon = 'check_circle', type: 'success' | 'error' | 'info' = 'success') => {
-    const id = Date.now().toString();
-    setToast({ id, text, icon, type });
-    setTimeout(() => {
-      setToast((current) => (current?.id === id ? null : current));
-    }, 3800);
-  };
 
   const handleToggleLanguage = () => {
     setLang((prev) => {
@@ -185,11 +233,11 @@ export default function App() {
   const handlePayoutSuccess = async (amount: number, method: string) => {
     const role = currentAccount === 'consumer' ? 'rescuer' : currentAccount;
     const { success, refCode } = await executeSecurePayout(
-      'USR-SY-9901',
+      userProfile?.id || 'USR-ANON',
       role,
       amount,
       method,
-      'ChamCash-0933-211445',
+      'Internal Settlement',
       '123456'
     );
 
@@ -209,15 +257,13 @@ export default function App() {
   };
 
   const handleAccountChange = (acc: AccountType) => {
-    // Role Isolation: Force login if not logged in AS that specific role
+    // SECURITY GUARD: Force AuthPortal for any non-consumer or unauthenticated role
     if (acc !== 'consumer' && (!isLoggedIn || authRole !== acc)) {
       setCurrentAccount(acc);
-      // We don't change screen yet, AuthPortal will be shown by main logic
       return;
     }
     
     setCurrentAccount(acc);
-    // Reset secondary screen
     if (acc === 'consumer') setCurrentScreen('marketplace-catalog');
     if (acc === 'merchant') setCurrentScreen('merchant-dashboard');
     if (acc === 'driver') setCurrentScreen('driver-portal');
@@ -225,173 +271,31 @@ export default function App() {
 
     const tr = translations[lang];
     const label = isEn
-      ? acc === 'consumer'
-        ? tr.consumerAccount
-        : acc === 'merchant'
-        ? tr.merchantAccount
-        : acc === 'driver'
-        ? 'Dedicated Driver & Captain Portal'
-        : 'Dedicated Admin & Oversight Hub'
-      : acc === 'consumer'
-      ? tr.consumerAccount
-      : acc === 'merchant'
-      ? tr.merchantAccount
-      : acc === 'driver'
-      ? 'بوابة الكابتن والسائق الميداني'
-      : 'بوابة الإدارة المركزية والرقابة (شاملة تفاصيل الطلب)';
-    showToast(isEn ? `Switched to: ${label}` : `تم التبديل إلى: ${label}`, 'login');
+      ? acc === 'consumer' ? tr.consumerAccount : acc === 'merchant' ? tr.merchantAccount : acc === 'driver' ? 'Driver Portal' : 'Admin Hub'
+      : acc === 'consumer' ? tr.consumerAccount : acc === 'merchant' ? tr.merchantAccount : acc === 'driver' ? 'بوابة الكابتن' : 'بوابة الإدارة';
+    showToast(isEn ? `Portal: ${label}` : `تم الانتقال إلى: ${label}`, 'login');
   };
 
-  const handleLoginSuccess = (profile: UserProfile) => {
+  const handleLoginSuccess = async (profile: UserProfile) => {
     setIsLoggedIn(true);
     setAuthRole(profile.role);
     setUserProfile(profile);
     setCurrentAccount(profile.role);
     setIsAuthModalOpen(false);
     
+    // Default screens per role
     if (profile.role === 'consumer') setCurrentScreen('marketplace-catalog');
     if (profile.role === 'merchant') setCurrentScreen('merchant-dashboard');
     if (profile.role === 'admin') setCurrentScreen('platform-admin');
     
-    showToast(isEn ? `Welcome ${profile.name}!` : `مرحباً بك ${profile.name}!`, 'verified', 'success');
+    // Fetch REAL wallet balances from DB
+    const balance = await fetchUserWalletBalance(profile.id);
+    if (profile.role === 'consumer') setWalletBalance(balance);
+    if (profile.role === 'merchant') setMerchantWalletBalance(balance);
+    if (profile.role === 'driver') setDriverWalletBalance(balance);
+
+    showToast(isEn ? `Identity Verified: ${profile.name}` : `تم التحقق من الهوية: ${profile.name}`, 'verified', 'success');
   };
-
-  // E2E TESTING SUITE HANDLERS
-  const handleSeedData = () => {
-    // 1. Add more orders
-    const extraOrders: OrderItem[] = [
-      { 
-        id: 'DEMO-801', 
-        customerName: 'لمى الأحمد', 
-        customerPhone: '0933112233',
-        governorate: 'دمشق',
-        cityArea: 'الشعلان',
-        deliveryAddress: 'شارع المتنبي - بناء 4',
-        storeName: 'أفران الهدى',
-        storePhone: '011-223344',
-        boxTitle: 'سلة المخبوزات اليومية', 
-        orderType: 'delivery',
-        price: 18000, 
-        status: 'pending', 
-        paymentMethod: 'شام كاش', 
-        merchantNet: 15300, 
-        orderPlacedAt: 'اليوم، 12:00 م',
-        pickupWindow: '4:00 م - 6:00 م',
-        financialSplit: { totalCustomerPaid: 18000, merchantShare: 15300, driverShare: 0, platformOperationalFee: 2700, currency: 'ل.س' },
-        lifecycle: []
-      },
-      { 
-        id: 'DEMO-802', 
-        customerName: 'فادي المصري', 
-        customerPhone: '0944887766',
-        governorate: 'حلب',
-        cityArea: 'الشهباء',
-        deliveryAddress: 'حي السبيل - بناء 12',
-        storeName: 'حلويات الشهباء',
-        storePhone: '021-554433',
-        boxTitle: 'مشكل فواكه مجففة', 
-        orderType: 'pickup',
-        price: 35000, 
-        status: 'pending', 
-        paymentMethod: 'بطاقة بنكية', 
-        merchantNet: 29750, 
-        orderPlacedAt: 'اليوم، 1:30 م',
-        pickupWindow: '8:00 م - 10:00 م',
-        financialSplit: { totalCustomerPaid: 35000, merchantShare: 29750, driverShare: 0, platformOperationalFee: 5250, currency: 'ل.س' },
-        lifecycle: []
-      },
-    ];
-
-    setOrders(prev => [...extraOrders, ...prev]);
-    showToast(isEn ? 'Demo stores & orders seeded across categories' : 'تم توليد متاجر وصناديق تجريبية تغطي كافة التصنيفات والمحافظات', 'database', 'success');
-  };
-
-  const handleDevTopup = (amt: number) => {
-    setWalletBalance(prev => prev + amt);
-    showToast(isEn ? `Added ${amt.toLocaleString()} SYP for testing` : `تمت إضافة ${amt.toLocaleString()} ل.س رصيد تجريبي`, 'payments', 'success');
-  };
-
-  const handleSimulateLifecycle = () => {
-    showToast(isEn ? 'Simulating order lifecycle...' : 'بدء محاكاة دورة حياة الطلب...', 'published_with_changes', 'info');
-    
-    // 1. Rescuer chooses and pays
-    const simId = `${Math.floor(1000 + Math.random() * 9000)}`;
-    const price = 15000;
-    const platformFee = 2250;
-    const merchantNet = price - platformFee;
-
-    const simOrder: OrderItem = {
-      id: simId,
-      customerName: 'فادي علي (تجريبي)',
-      customerPhone: '0955443322',
-      governorate: 'دمشق',
-      cityArea: 'المزة',
-      deliveryAddress: 'فيلات غربية - بناء 8',
-      storeName: 'حلويات دمشق الدولية',
-      storePhone: '011-887766',
-      boxTitle: 'سلة حلويات شامية مشكلة',
-      orderType: 'pickup',
-      price: price,
-      status: 'pending',
-      paymentMethod: 'محفظة بركة',
-      merchantNet: merchantNet,
-      orderPlacedAt: 'الآن (محاكاة)',
-      pickupWindow: 'الليلة 9:00 م',
-      financialSplit: {
-        totalCustomerPaid: price,
-        merchantShare: merchantNet,
-        driverShare: 0,
-        platformOperationalFee: platformFee,
-        currency: 'ل.س'
-      },
-      lifecycle: [
-        { stepNumber: 1, title: 'حجز السلة', timestamp: 'الآن', actor: 'المستهلك', actorName: 'فادي علي', status: 'completed', summary: 'تم الحجز والسداد من المحفظة', details: 'سداد مبلغ 15,000 ل.س بنجاح' }
-      ]
-    };
-    
-    setOrders(prev => [simOrder, ...prev]);
-    handleDeductWallet(price);
-    
-    // 2. Partner receives notification (Toast)
-    setTimeout(() => {
-      showToast(isEn ? 'Partner: New Order #BB-' + simId : 'التاجر: استلام طلب جديد رقم #BB-' + simId, 'notifications_active', 'info');
-      
-      // 3. Partner accepts and prepares
-      setTimeout(() => {
-        setOrders(prev => prev.map(o => o.id === simId ? { 
-          ...o, 
-          status: 'pending', // Still pending but prepared
-          lifecycle: [...o.lifecycle, { stepNumber: 2, title: 'تجهيز السلة', timestamp: 'قبل قليل', actor: 'التاجر', actorName: 'حلويات دمشق', status: 'completed', summary: 'السلة جاهزة للاستلام', details: 'تم تغليف المحتويات وتجهيزها بالفرع' }]
-        } : o));
-        showToast(isEn ? 'Partner: Box Prepared & Ready' : 'التاجر: السلة جاهزة ومغلفة بانتظار الزبون', 'inventory_2', 'success');
-
-        // 4. Simulate OTP Entry / Handover
-        setTimeout(() => {
-          setOrders(prev => prev.map(o => o.id === simId ? { 
-            ...o, 
-            status: 'delivered',
-            verifiedAt: 'الآن',
-            lifecycle: [...o.lifecycle, { stepNumber: 3, title: 'توثيق التسليم', timestamp: 'الآن', actor: 'نظام المقاصة الآلي', actorName: 'Barakah Ledger', status: 'completed', summary: 'تم إدخال OTP وصرف المستحقات', details: `تم تحويل ${merchantNet.toLocaleString()} ل.س لمحفظة التاجر` }]
-          } : o));
-          handleUpdateMerchantWallet(merchantNet);
-          showToast(isEn ? `Order ${simId}: Delivered! Profit: ${merchantNet} SYP` : `الطلب ${simId}: تم التسليم! الربح: ${merchantNet} ل.س`, 'verified', 'success');
-        }, 4000);
-      }, 3000);
-    }, 2000);
-  };
-
-  const handleResetDatabase = () => {
-    setOrders(INITIAL_ORDERS);
-    setWalletBalance(45000);
-    setMerchantWalletBalance(420000);
-    setDriverWalletBalance(18500);
-    setIsLoggedIn(false);
-    setAuthRole(null);
-    setCurrentAccount('consumer');
-    setCurrentScreen('marketplace-catalog');
-    showToast(isEn ? 'System Reset to Default State' : 'تمت إعادة ضبط النظام للحالة الافتراضية', 'restart_alt', 'info');
-  };
-
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -399,285 +303,212 @@ export default function App() {
     setUserProfile(null);
     setCurrentAccount('consumer');
     setCurrentScreen('marketplace-catalog');
-    showToast(isEn ? 'Logged out' : 'تم تسجيل الخروج', 'logout', 'info');
+    showToast(isEn ? 'Session ended securely' : 'تم إنهاء الجلسة وتأمين الحساب', 'logout', 'info');
+  };
+
+  const handleUpdateUserPassword = async (userId: string, newPass: string) => {
+    const success = await updateUserPassword(userId, newPass);
+    if (success) {
+      showToast(isEn ? 'Password updated successfully' : 'تم تحديث كلمة المرور بنجاح', 'lock_reset');
+    } else {
+      showToast(isEn ? 'Failed to update password' : 'فشل تحديث كلمة المرور', 'error', 'error');
+    }
   };
 
   return (
-    <div
-      dir={isEn ? 'ltr' : 'rtl'}
-      className="min-h-screen bg-[#faf8ff] text-[#131b2e] flex flex-col font-sans selection:bg-[#85f8c4] selection:text-[#002114]"
-    >
-      {/* Top Universal Navbar with Dedicated Syrian Account Switcher */}
-      <Navbar
-        currentAccount={currentAccount}
-        onChangeAccount={handleAccountChange}
-        currentScreen={currentScreen}
-        onNavigate={setCurrentScreen}
-        walletBalance={walletBalance}
-        onOpenTopup={() => setIsTopupOpen(true)}
-        detectedLocation={detectedLocation}
-        isGpsLoading={isGpsLoading}
-        onAutoDetectLocation={handleAutoDetectLocation}
-        lang={lang}
-        onToggleLanguage={handleToggleLanguage}
-        isLoggedIn={isLoggedIn}
-        onLogout={handleLogout}
-        onOpenAuth={() => setIsAuthModalOpen(true)}
-      />
+    <ErrorBoundary>
+      <div
+        dir={isEn ? 'ltr' : 'rtl'}
+        className="min-h-screen bg-[#faf8ff] text-[#131b2e] flex flex-col font-sans selection:bg-[#85f8c4] selection:text-[#002114]"
+      >
+        <Navbar
+          currentAccount={currentAccount}
+          onChangeAccount={handleAccountChange}
+          currentScreen={currentScreen}
+          onNavigate={setCurrentScreen}
+          walletBalance={walletBalance}
+          onOpenTopup={() => setIsTopupOpen(true)}
+          detectedLocation={detectedLocation}
+          isGpsLoading={isGpsLoading}
+          onAutoDetectLocation={handleAutoDetectLocation}
+          lang={lang}
+          onToggleLanguage={handleToggleLanguage}
+          isLoggedIn={isLoggedIn}
+          onLogout={handleLogout}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+        />
 
-      {/* Main Content Area */}
-      <main className="flex-1 pt-28 pb-12 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Auth Check for Restricted Portals: Partners, Admins, and Captains must be logged in with correct role */}
-        {((currentAccount === 'merchant' || currentAccount === 'admin' || currentAccount === 'driver') && (!isLoggedIn || authRole !== currentAccount)) ? (
-          <AuthPortal 
-            onLoginSuccess={handleLoginSuccess} 
-            onClose={() => setCurrentAccount('consumer')}
-            lang={lang} 
-            defaultMode={currentAccount === 'admin' ? 'admin' : currentAccount === 'merchant' ? 'partner' : 'consumer'} 
-          />
-        ) : (
-          <>
-            {/* Support Screens Check */}
-        {currentScreen === 'live-navigation' ? (
-          <div className="flex flex-col gap-4">
-            <button
-              onClick={() => setCurrentScreen('marketplace-catalog')}
-              className="self-start px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[16px]">
-                {isEn ? 'arrow_back' : 'arrow_forward'}
-              </span>
-              <span>{isEn ? 'Back to Main Portal' : 'العودة للبوابة الرئيسية'}</span>
-            </button>
-            <LiveNavigation
-              onShowToast={showToast}
-              driverWalletBalance={driverWalletBalance}
-              onUpdateDriverWallet={handleUpdateDriverWallet}
-              onNavigate={setCurrentScreen}
-            />
-          </div>
-        ) : currentScreen === 'impact-report' ? (
-          <div className="flex flex-col gap-4">
-            <button
-              onClick={() => setCurrentScreen('marketplace-catalog')}
-              className="self-start px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[16px]">
-                {isEn ? 'arrow_back' : 'arrow_forward'}
-              </span>
-              <span>{isEn ? 'Back to Main Portal' : 'العودة للبوابة الرئيسية'}</span>
-            </button>
-            <ImpactReport
-              onShowToast={showToast}
-              onNavigate={setCurrentScreen}
-              walletBalance={walletBalance}
-              onCreditWallet={(amt) => handleTopupSuccess(amt)}
-              lang={lang}
-              rewardRules={rewardRules}
-            />
-          </div>
-        ) : (
-          <>
-            {/* 1. DEDICATED CONSUMER ACCOUNT */}
-            {currentAccount === 'consumer' && (
-              <ConsumerPortal
-                walletBalance={walletBalance}
-                onDeductWallet={handleDeductWallet}
-                onOpenTopup={() => setIsTopupOpen(true)}
-                onOpenPayout={() => setIsPayoutOpen(true)}
-                onShowToast={showToast}
-                detectedLocation={detectedLocation}
-                onAutoDetectLocation={handleAutoDetectLocation}
-                isGpsLoading={isGpsLoading}
-                lang={lang}
-              />
-            )}
-
-            {/* 2. DEDICATED MERCHANT ACCOUNT */}
-            {currentAccount === 'merchant' && (
-              <MerchantPortal
-                orders={orders}
-                merchantWalletBalance={merchantWalletBalance}
-                onUpdateMerchantWallet={handleUpdateMerchantWallet}
-                onOpenPayout={() => setIsPayoutOpen(true)}
-                onShowToast={showToast}
-                lang={lang}
-                userProfile={userProfile}
-              />
-            )}
-
-            {/* 3. DEDICATED DRIVER / CAPTAIN ACCOUNT */}
-            {currentAccount === 'driver' && (
-              <DriverPortal
-                driverWalletBalance={driverWalletBalance}
-                onUpdateDriverWallet={handleUpdateDriverWallet}
-                onUpdateMerchantWallet={handleUpdateMerchantWallet}
-                onOpenPayout={() => setIsPayoutOpen(true)}
-                onShowToast={showToast}
-                lang={lang}
-                orders={orders}
-                onExitToConsumer={() => handleAccountChange('consumer')}
-              />
-            )}
-
-            {/* 4. DEDICATED ADMIN ACCOUNT WITH END-TO-END ORDER LIFECYCLE INSPECTOR */}
-            {currentAccount === 'admin' && (
-              <AdminPortal
-                orders={orders}
-                disputes={disputes}
-                commissions={commissions}
-                auditLogs={auditLogs}
-                rewardRules={rewardRules}
-                onShowToast={showToast}
-                onRefundRescuer={handleRefundCustomer}
-                onUpdateCommissionRate={handleUpdateCommissionRate}
-                onSaveRewardRule={handleSaveRewardRule}
-                onIssueBonus={handleIssueBonus}
-                lang={lang}
-              />
-            )}
-          </>
-        )}
-      </>
-    )}
-  </main>
-
-      {/* Platform Universal Footer with subtle Captain & Admin Access Entry */}
-      <footer className="mt-auto bg-white border-t border-slate-200/80 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500">
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <span className="font-bold text-[#006948] text-sm">
-              {isEn ? 'Barakah Box • Syria' : 'صندوق بركة • سوريا'}
-            </span>
-            <span className="hidden sm:inline text-slate-300">|</span>
-            <span>
-              {isEn
-                ? 'National Platform for Food-Waste Reduction & Surplus Rescue'
-                : 'المنظومة الوطنية لحفظ النعمة ومكافحة الهدر الغذائي'}
-            </span>
-          </div>
-
-          {/* Quick Subtle Role & Support Links */}
-          <div className="flex flex-wrap items-center justify-center gap-4 font-semibold">
-            <button
-              onClick={() => handleAccountChange('consumer')}
-              className={`hover:text-[#006948] transition-colors cursor-pointer ${
-                currentAccount === 'consumer' ? 'text-[#006948] font-bold' : ''
-              }`}
-            >
-              {isEn ? 'Rescuer Portal' : 'بوابة المنقذ'}
-            </button>
-
-            <button
-              onClick={() => handleAccountChange('merchant')}
-              className={`hover:text-[#006948] transition-colors cursor-pointer ${
-                currentAccount === 'merchant' ? 'text-[#006948] font-bold' : ''
-              }`}
-            >
-              {isEn ? 'Partner Dashboard' : 'بوابة الشريك الشامي'}
-            </button>
-
-            {/* Subtle Driver Portal Entry as requested */}
-            <button
-              onClick={() => {
-                handleAccountChange('driver');
-                showToast(
-                  isEn ? 'Welcome to Captain Portal! Manage your deliveries.' : 'مرحباً بك في بوابة الكباتن! يمكنك إدارة مهام التوصيل.',
-                  'two_wheeler',
-                  'info'
-                );
-              }}
-              className="text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors cursor-pointer font-bold"
-            >
-              <span className="material-symbols-outlined text-[15px] text-amber-700">two_wheeler</span>
-              <span>{isEn ? 'Become a Driver / Captain Login' : 'انضم ككابتن توصيل / دخول الكباتن'}</span>
-            </button>
-
-            <button
-              onClick={() => handleAccountChange('admin')}
-              className={`hover:text-slate-900 transition-colors cursor-pointer ${
-                currentAccount === 'admin' ? 'text-slate-900 font-bold' : 'text-slate-400'
-              }`}
-            >
-              {isEn ? 'Platform Governance' : 'بوابة الإدارة والرقابة'}
-            </button>
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400">
-          <span>
-            {isEn
-              ? 'Covering Damascus, Rif Dimashq, Aleppo, Homs, Latakia, Hama, Tartous & All Syrian Governorates.'
-              : 'تغطي المنظومة دمشق، ريف دمشق، حلب، حمص، اللاذقية، حماة، طرطوس وكافة المحافظات السورية.'}
-          </span>
-          <span>© 2026 Barakah Box Syria. All rights reserved.</span>
-        </div>
-      </footer>
-
-      {/* Wallet Topup Modal */}
-      <WalletTopupModal
-        isOpen={isTopupOpen}
-        onClose={() => setIsTopupOpen(false)}
-        currentBalance={walletBalance}
-        onTopupSuccess={handleTopupSuccess}
-        lang={lang}
-      />
-
-      {/* Payout / Withdrawal Modal */}
-      <PayoutModal
-        isOpen={isPayoutOpen}
-        onClose={() => setIsPayoutOpen(false)}
-        currentBalance={
-          currentAccount === 'merchant'
-            ? merchantWalletBalance
-            : currentAccount === 'driver'
-            ? driverWalletBalance
-            : walletBalance
-        }
-        role={
-          currentAccount === 'consumer'
-            ? 'rescuer'
-            : currentAccount === 'merchant'
-            ? 'partner'
-            : currentAccount === 'driver'
-            ? 'captain'
-            : 'admin'
-        }
-        onPayoutSuccess={handlePayoutSuccess}
-        lang={lang}
-      />
-
-      {/* Toast Notification Container */}
-      <Toast toast={toast} onClose={() => setToast(null)} />
-
-      {/* Dev Tools Sidebar */}
-      <DevTools 
-        onSeedData={handleSeedData}
-        onTopupWallet={handleDevTopup}
-        onSimulateLifecycle={handleSimulateLifecycle}
-        onResetDatabase={handleResetDatabase}
-        lang={lang}
-      />
-
-      {/* Auth Modal Overlay */}
-      <AnimatePresence>
-        {isAuthModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md"
-          >
-            <div className="relative w-full max-w-md">
+        <main className="flex-1 pt-28 pb-12 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* AUTH GUARD: If not consumer and not logged in with correct role, show AuthPortal */}
+          {((currentAccount !== 'consumer') && (!isLoggedIn || authRole !== currentAccount)) ? (
+            <div className="flex items-center justify-center py-12 animate-in fade-in zoom-in-95 duration-500">
               <AuthPortal 
-                onLoginSuccess={handleLoginSuccess}
-                onClose={() => setIsAuthModalOpen(false)}
-                lang={lang}
+                onLoginSuccess={handleLoginSuccess} 
+                onClose={() => setCurrentAccount('consumer')}
+                lang={lang} 
+                defaultMode={currentAccount === 'admin' ? 'admin' : currentAccount === 'merchant' ? 'partner' : 'consumer'} 
               />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+          ) : (
+            <div className="relative">
+              {isLoadingData && (
+                <div className="absolute inset-x-0 -top-4 flex justify-center z-10">
+                  <div className="bg-[#006948] text-white px-4 py-1.5 rounded-full text-[10px] font-bold shadow-lg animate-bounce">
+                    {isEn ? 'Syncing with Syrian Database...' : 'جاري المزامنة مع قاعدة البيانات السورية...'}
+                  </div>
+                </div>
+              )}
+              
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${currentAccount}-${currentScreen}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {currentScreen === 'live-navigation' ? (
+                    <LiveNavigation
+                      onShowToast={showToast}
+                      driverWalletBalance={driverWalletBalance}
+                      onUpdateDriverWallet={handleUpdateDriverWallet}
+                      onNavigate={setCurrentScreen}
+                    />
+                  ) : currentScreen === 'impact-report' ? (
+                    <ImpactReport
+                      onShowToast={showToast}
+                      onNavigate={setCurrentScreen}
+                      walletBalance={walletBalance}
+                      onCreditWallet={(amt) => handleTopupSuccess(amt)}
+                      lang={lang}
+                      rewardRules={rewardRules}
+                      orders={orders}
+                      userProfile={userProfile}
+                    />
+                  ) : currentAccount === 'consumer' ? (
+                    <ConsumerPortal
+                      boxes={boxes}
+                      orders={orders}
+                      supportTickets={supportTickets}
+                      walletBalance={walletBalance}
+                      onDeductWallet={handleDeductWallet}
+                      onOpenTopup={() => setIsTopupOpen(true)}
+                      onOpenPayout={() => setIsPayoutOpen(true)}
+                      onShowToast={showToast}
+                      onOpenAuth={() => setIsAuthModalOpen(true)}
+                      detectedLocation={detectedLocation}
+                      onAutoDetectLocation={handleAutoDetectLocation}
+                      isGpsLoading={isGpsLoading}
+                      lang={lang}
+                      userProfile={userProfile}
+                    />
+                  ) : currentAccount === 'merchant' ? (
+                    <MerchantPortal
+                      orders={orders}
+                      merchantWalletBalance={merchantWalletBalance}
+                      onUpdateMerchantWallet={handleUpdateMerchantWallet}
+                      onOpenPayout={() => setIsPayoutOpen(true)}
+                      onShowToast={showToast}
+                      lang={lang}
+                      userProfile={userProfile}
+                    />
+                  ) : currentAccount === 'driver' ? (
+                    <DriverPortal
+                      driverWalletBalance={driverWalletBalance}
+                      onUpdateDriverWallet={handleUpdateDriverWallet}
+                      onUpdateMerchantWallet={handleUpdateMerchantWallet}
+                      onOpenPayout={() => setIsPayoutOpen(true)}
+                      onShowToast={showToast}
+                      lang={lang}
+                      orders={orders}
+                      onExitToConsumer={() => handleAccountChange('consumer')}
+                      userProfile={userProfile}
+                    />
+                  ) : (
+                    <AdminPortal
+                      orders={orders}
+                      disputes={disputes}
+                      commissions={commissions}
+                      auditLogs={auditLogs}
+                      rewardRules={rewardRules}
+                      supportTickets={supportTickets}
+                      partners={partners}
+                      onShowToast={showToast}
+                      onRefundRescuer={handleRefundCustomer}
+                      onUpdateCommissionRate={handleUpdateCommissionRate}
+                      onSaveRewardRule={handleSaveRewardRule}
+                      onIssueBonus={handleIssueBonus}
+                      onUpdateUserPassword={handleUpdateUserPassword}
+                      lang={lang}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          )}
+        </main>
+
+        <footer className="mt-auto bg-white border-t border-slate-200/80 py-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500">
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <span className="font-bold text-[#006948] text-sm">
+                {isEn ? 'Barakah Box • Syria' : 'صندوق بركة • سوريا'}
+              </span>
+              <span className="hidden sm:inline text-slate-300">|</span>
+              <span>
+                {isEn
+                  ? 'National Platform for Food-Waste Reduction'
+                  : 'المنظومة الوطنية لحفظ النعمة'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-4 font-semibold">
+              <button onClick={() => handleAccountChange('consumer')} className={`hover:text-[#006948] transition-colors ${currentAccount === 'consumer' ? 'text-[#006948]' : ''}`}>
+                {isEn ? 'Rescuer' : 'المنقذ'}
+              </button>
+              <button onClick={() => handleAccountChange('merchant')} className={`hover:text-[#006948] transition-colors ${currentAccount === 'merchant' ? 'text-[#006948]' : ''}`}>
+                {isEn ? 'Partner' : 'الشريك الشامي'}
+              </button>
+              <button onClick={() => handleAccountChange('driver')} className="text-amber-800 hover:text-amber-900 bg-amber-50 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors font-bold">
+                <span className="material-symbols-outlined text-[15px]">two_wheeler</span>
+                <span>{isEn ? 'Captain' : 'الكابتن'}</span>
+              </button>
+              <button onClick={() => handleAccountChange('admin')} className={`hover:text-slate-900 transition-colors ${currentAccount === 'admin' ? 'text-slate-900' : 'text-slate-400'}`}>
+                {isEn ? 'Governance' : 'الرقابة'}
+              </button>
+            </div>
+          </div>
+          <div className="max-w-7xl mx-auto mt-4 text-[10px] text-slate-400 text-center sm:text-right">
+            © 2026 Barakah Box Syria. {isEn ? 'Secure Database Integrated.' : 'قاعدة البيانات الموحدة موثقة.'}
+          </div>
+        </footer>
+
+        <WalletTopupModal isOpen={isTopupOpen} onClose={() => setIsTopupOpen(false)} currentBalance={walletBalance} onTopupSuccess={handleTopupSuccess} lang={lang} />
+        <PayoutModal 
+          isOpen={isPayoutOpen} 
+          onClose={() => setIsPayoutOpen(false)} 
+          currentBalance={currentAccount === 'merchant' ? merchantWalletBalance : currentAccount === 'driver' ? driverWalletBalance : walletBalance} 
+          role={currentAccount === 'consumer' ? 'rescuer' : currentAccount === 'merchant' ? 'partner' : currentAccount === 'driver' ? 'captain' : 'admin'} 
+          onPayoutSuccess={handlePayoutSuccess} 
+          lang={lang} 
+        />
+        <Toast toast={toast} onClose={() => setToast(null)} />
+        
+        <AnimatePresence>
+          {isAuthModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md"
+            >
+              <div className="relative w-full max-w-md">
+                <AuthPortal onLoginSuccess={handleLoginSuccess} onClose={() => setIsAuthModalOpen(false)} lang={lang} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </ErrorBoundary>
   );
 }

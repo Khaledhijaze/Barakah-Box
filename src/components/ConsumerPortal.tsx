@@ -1,40 +1,59 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BarakahBox, SyrianGovernorate, SupportTicket, Language } from '../types';
+import { BarakahBox, SyrianGovernorate, SupportTicket, Language, OrderItem, UserProfile } from '../types';
 import { INITIAL_BOXES } from '../data/mockData';
 import { AIAssistantChat } from './AIAssistantChat';
 import { OrderHelpModal } from './OrderHelpModal';
 import { SYRIAN_GOVERNORATES, SYRIAN_DISTRICTS, calculateDistanceKm, GovernorateItem, DistrictItem } from '../data/geographyData';
 import { t } from '../data/translations';
-import { fetchGovernoratesFromDb, fetchDistrictsFromDb, executeSupabaseInstantRefund, persistSupportTicketToDb, uploadFileToSupabase } from '../db/supabaseClient';
+import { fetchGovernoratesFromDb, fetchDistrictsFromDb, executeSupabaseInstantRefund, persistSupportTicketToDb, uploadFileToSupabase, updateOrderStatus, createOrderInDb } from '../db/supabaseClient';
 
 interface ConsumerPortalProps {
+  boxes: BarakahBox[];
+  orders: OrderItem[];
+  supportTickets: SupportTicket[];
   walletBalance: number;
   onDeductWallet: (amount: number) => void;
   onOpenTopup: () => void;
   onOpenPayout: () => void;
+  onOpenAuth: () => void;
   onShowToast: (text: string, icon?: string, type?: 'success' | 'error' | 'info') => void;
   detectedLocation: { lat: number; lng: number; gov_ar: string; gov_en: string; dist_ar: string; dist_en: string } | null;
   onAutoDetectLocation: () => void;
   isGpsLoading: boolean;
   lang?: Language;
+  userProfile?: UserProfile | null;
 }
 
 export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
+  boxes,
+  orders,
+  supportTickets: initialSupportTickets,
   walletBalance,
   onDeductWallet,
   onOpenTopup,
   onOpenPayout,
+  onOpenAuth,
   onShowToast,
   detectedLocation,
   onAutoDetectLocation,
   isGpsLoading,
   lang = 'ar',
+  userProfile,
 }) => {
   const isEn = lang === 'en';
   const tr = t[lang];
 
   const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'active_orders' | 'wallet' | 'impact' | 'support'>('catalog');
+  
+  const handleTabChange = (tab: typeof activeSubTab) => {
+    if (tab !== 'catalog' && !userProfile) {
+      onShowToast(isEn ? 'Identity verification required to access this portal' : 'يتطلب الوصول لهذا القسم التحقق من الهوية أولاً', 'lock', 'info');
+      onOpenAuth();
+      return;
+    }
+    setActiveSubTab(tab);
+  };
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('nearest');
 
@@ -55,6 +74,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card' | 'shamcash' | 'cash'>('wallet');
   const [isBookingProcessing, setIsBookingProcessing] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [justBookedVoucher, setJustBookedVoucher] = useState<any>(null);
 
   // Bank Card Form State (Inside Booking Modal)
   const [cardBank, setCardBank] = useState<string>('المصرف التجاري السوري (CBS)');
@@ -74,51 +94,11 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
   // Unified Floating AI Support Modal (NO WHATSAPP!)
   const [isFloatingSupportOpen, setIsFloatingSupportOpen] = useState(false);
 
-  // Customer Support Tickets State
-  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([
-    {
-      id: 'TKT-AUTO-9038',
-      createdAt: isEn ? 'Today, 11:20 AM' : 'اليوم، 11:20 ص',
-      customerName: 'رامي السعيد',
-      customerPhone: '0944-123456',
-      orderId: '#BB-9038',
-      vendorName: 'حلويات الشهباء',
-      governorate: 'حلب',
-      category: 'المتجر كان مغلقاً عند الوصول',
-      issueType: 'store_closed',
-      subject: isEn ? 'Store Closed - Instant Auto Refund #BB-9038' : 'المتجر كان مغلقاً عند الوصول - طلب #BB-9038',
-      message: isEn
-        ? 'Customer arrived during pickup window and found venue closed. 100% wallet refund executed immediately.'
-        : 'تم تفعيل الاسترداد التلقائي الفوري لمبلغ 22,000 ل.س وإيداعه في المحفظة دون انتظار.',
-      status: 'auto_refunded',
-      autoRefundTriggered: true,
-      refundAmount: 22000,
-      adminDecision: 'approved_refund',
-      response: isEn
-        ? '22,000 SYP refunded instantly to your digital wallet.'
-        : 'تم استرداد 22,000 ل.س فورياً إلى محفظة بركة الرقمية.',
-      resolutionSpeedMinutes: 0.3,
-    },
-    {
-      id: 'TKT-7821',
-      createdAt: isEn ? 'Yesterday, 06:45 PM' : 'أمس، 06:45 م',
-      customerName: 'رامي السعيد',
-      customerPhone: '0944-123456',
-      orderId: '#BB-9048',
-      vendorName: 'مخبز وشمسين للشامي الأصيل',
-      governorate: 'دمشق',
-      category: 'سداد وبطاقة بنكية',
-      issueType: 'payment_unconfirmed',
-      subject: isEn ? 'Debit Card Confirmation' : 'تأكيد خصم البطاقة المصرفية لطلب المخبز',
-      message: isEn
-        ? 'Reserved via Commercial Bank of Syria card. Inquiring about store readiness.'
-        : 'تم حجز السلة عبر بطاقة المصرف التجاري السوري وأود التأكد من استلام المتجر للإشعار.',
-      status: 'resolved',
-      adminDecision: 'approved_refund',
-      response: isEn ? 'Payment verified and basket ready for pickup.' : 'تم التحقق من نجاح العملية واكتمال الخصم، وسلتك جاهزة للاستلام بالفرع.',
-      resolutionSpeedMinutes: 2.5,
-    },
-  ]);
+  // Customer Support Tickets State (initialized from props)
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(initialSupportTickets);
+  useEffect(() => {
+    setSupportTickets(initialSupportTickets);
+  }, [initialSupportTickets]);
 
   // New Support Ticket Form
   const [newTicketSubject, setNewTicketSubject] = useState('');
@@ -126,17 +106,19 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
   const [newTicketOrder, setNewTicketOrder] = useState('');
   const [newTicketMessage, setNewTicketMessage] = useState('');
 
-  // Active reservation voucher
+  // Active reservation voucher (derived from orders prop)
+  const activeOrder = useMemo(() => orders.find(o => o.status === 'pending' || o.status === 'in_transit'), [orders]);
+  
   const [proofPhoto, setProofPhoto] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleCapturePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !activeOrder) return;
 
     setIsUploading(true);
-    const fileName = `proofs/${activeOrderVoucher.orderId}-${Date.now()}.jpg`;
+    const fileName = `proofs/${activeOrder.id}-${Date.now()}.jpg`;
     const { publicUrl, error } = await uploadFileToSupabase(file, 'proofs', fileName);
     setIsUploading(false);
 
@@ -151,35 +133,27 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
     }
   };
 
-  const [activeOrderVoucher, setActiveOrderVoucher] = useState({
-    orderId: '#BB-9048',
-    vendor: 'مخبز وشمسين للشامي الأصيل',
-    itemDesc: 'سلة المخبوزات والكرواسان المشكلة الفاخرة',
-    amount: 14000,
-    pin: '7 4 9 2',
-    pickupTime: isEn ? 'Tonight 8:30 PM - 9:45 PM' : 'الليلة 8:30 م - 9:45 م',
-    governorate: isEn ? 'Damascus' : 'دمشق',
-    location: isEn ? 'Damascus, Mazzeh - East Villas' : 'دمشق، المزة - الفيلات الشرقية، مقابل حديقة الطلائع',
-    orderType: 'pickup' as 'pickup' | 'delivery',
-    paymentMethod: isEn ? 'Syrian Bank Card (CBS)' : 'بطاقة بنكية مصرفية (التجاري)',
-  });
-
-  // Sample Past Completed Order
-  const pastCompletedOrder = {
-    orderId: '#BB-9042',
-    vendor: isEn ? 'Al-Huda Bakeries' : 'أفران الهدى للشاميات',
-    itemDesc: isEn ? 'Fresh Bread & Sesame Pastries' : 'سلة الخبز السياحي والكعك بسمسم',
-    amount: 16000,
-    pickupTime: isEn ? 'Yesterday, 7:00 PM - 8:30 PM' : 'أمس، 7:00 م - 8:30 م',
-    governorate: isEn ? 'Damascus' : 'دمشق',
-    location: isEn ? 'Damascus, Al-Shaalan' : 'دمشق، الشعلان - شارع المتنبي',
-  };
+  const activeOrderVoucher = useMemo(() => {
+    if (!activeOrder) return null;
+    return {
+      orderId: `#BB-${activeOrder.id}`,
+      vendor: activeOrder.storeName,
+      itemDesc: activeOrder.boxTitle,
+      amount: activeOrder.price,
+      pin: '7 4 9 2', // In real app, this would come from DB
+      pickupTime: activeOrder.pickupWindow,
+      governorate: activeOrder.governorate,
+      location: activeOrder.deliveryAddress,
+      orderType: activeOrder.orderType,
+      paymentMethod: activeOrder.paymentMethod,
+    };
+  }, [activeOrder]);
 
   // Filter boxes dynamically based on GPS proximity and category
   const filteredBoxes = useMemo(() => {
     if (!detectedLocation) return [];
 
-    return INITIAL_BOXES.map((box) => {
+    return boxes.map((box) => {
       const boxLat = box.lat || 33.5138;
       const boxLng = box.lng || 36.2765;
       const dynamicDist = calculateDistanceKm(detectedLocation.lat, detectedLocation.lng, boxLat, boxLng);
@@ -202,10 +176,16 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
         if (sortBy === 'price-low') return a.discountedPrice - b.discountedPrice;
         return 0;
       });
-  }, [detectedLocation, selectedCategory, searchRadiusKm, sortBy]);
+  }, [boxes, detectedLocation, selectedCategory, searchRadiusKm, sortBy]);
 
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     if (!bookingModalBox) return;
+
+    if (!userProfile) {
+      onShowToast(isEn ? 'Identity verification required to complete reservation' : 'يرجى تسجيل الدخول أو إنشاء حساب لإتمام الحجز', 'lock', 'info');
+      onOpenAuth();
+      return;
+    }
 
     if (paymentMethod === 'wallet' && walletBalance < bookingModalBox.discountedPrice) {
       onShowToast(
@@ -230,39 +210,84 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
     }
 
     setIsBookingProcessing(true);
-    setTimeout(() => {
-      setIsBookingProcessing(false);
+    
+    // Simulate payment gateway delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    const newPin = `${Math.floor(1 + Math.random() * 9)}${Math.floor(1 + Math.random() * 9)}${Math.floor(1 + Math.random() * 9)}${Math.floor(1 + Math.random() * 9)}`;
+    const newOrderId = `#BB-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const payMethodLabel =
+      paymentMethod === 'card'
+        ? `${isEn ? 'Bank Card' : 'بطاقة بنكية'} (${cardBank})`
+        : paymentMethod === 'wallet'
+        ? isEn ? 'Barakah Wallet' : 'محفظة بركة'
+        : paymentMethod === 'shamcash'
+        ? 'شام كاش (ShamCash)'
+        : isEn ? 'Cash on Pickup' : 'دفع نقدي كاش بالفرع';
+
+    const orderObj: OrderItem = {
+      id: newOrderId,
+      customerName: userProfile.name,
+      customerPhone: userProfile.phoneNumber || 'N/A',
+      governorate: bookingModalBox.governorate,
+      cityArea: bookingModalBox.neighborhood,
+      deliveryAddress: orderType === 'delivery' ? deliveryAddress : (isEn ? 'In-Store Pickup' : 'استلام من الفرع'),
+      storeName: bookingModalBox.vendor,
+      storePhone: '011-4455',
+      boxTitle: bookingModalBox.title,
+      orderType: orderType,
+      price: bookingModalBox.discountedPrice,
+      merchantNet: Math.floor(bookingModalBox.discountedPrice * 0.8),
+      driverFee: orderType === 'delivery' ? 8500 : 0,
+      pickupWindow: `${bookingModalBox.pickupStart} - ${bookingModalBox.pickupEnd}`,
+      status: orderType === 'delivery' ? 'in_transit' : 'pending',
+      orderPlacedAt: new Date().toISOString(),
+      paymentMethod: payMethodLabel as any,
+      securityPin: newPin,
+      financialSplit: {
+        totalCustomerPaid: bookingModalBox.discountedPrice,
+        merchantShare: Math.floor(bookingModalBox.discountedPrice * 0.8),
+        driverShare: orderType === 'delivery' ? 8500 : 0,
+        platformOperationalFee: Math.floor(bookingModalBox.discountedPrice * 0.05),
+        currency: 'ل.س'
+      },
+      lifecycle: [
+        {
+          stepNumber: 1,
+          title: isEn ? 'Order Created' : 'تم إنشاء الطلب',
+          timestamp: new Date().toLocaleTimeString(isEn ? 'en-US' : 'ar-SY'),
+          actor: 'المستهلك',
+          actorName: userProfile.name,
+          status: 'completed',
+          summary: isEn ? 'Order successfully placed via platform' : 'تم تقديم الطلب بنجاح عبر المنصة',
+          details: isEn ? `Payment method: ${payMethodLabel}` : `وسيلة السداد: ${payMethodLabel}`
+        }
+      ]
+    };
+
+    const success = await createOrderInDb(orderObj);
+
+    setIsBookingProcessing(false);
+    if (success) {
       if (paymentMethod === 'wallet') {
         onDeductWallet(bookingModalBox.discountedPrice);
       }
 
-      const newPin = `${Math.floor(1 + Math.random() * 9)} ${Math.floor(1 + Math.random() * 9)} ${Math.floor(
-        1 + Math.random() * 9
-      )} ${Math.floor(1 + Math.random() * 9)}`;
-      const newOrderId = `#BB-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      const payMethodLabel =
-        paymentMethod === 'card'
-          ? `${isEn ? 'Bank Card' : 'بطاقة بنكية'} (${cardBank})`
-          : paymentMethod === 'wallet'
-          ? isEn ? 'Barakah Wallet' : 'محفظة بركة'
-          : paymentMethod === 'shamcash'
-          ? 'شام كاش (ShamCash)'
-          : isEn ? 'Cash on Pickup' : 'دفع نقدي كاش بالفرع';
-
-      setActiveOrderVoucher({
+      const voucher = {
         orderId: newOrderId,
         vendor: bookingModalBox.vendor,
         itemDesc: bookingModalBox.description,
         amount: bookingModalBox.discountedPrice,
         pin: newPin,
-        pickupTime: `${bookingModalBox.pickupStart} - ${bookingModalBox.pickupEnd}`,
-        governorate: bookingModalBox.governorate,
-        location: `${bookingModalBox.governorate} - ${bookingModalBox.neighborhood}`,
+        pickupTime: orderObj.pickupWindow,
+        governorate: orderObj.governorate,
+        location: orderObj.deliveryAddress,
         orderType,
         paymentMethod: payMethodLabel,
-      });
+      };
 
+      setJustBookedVoucher(voucher);
       setBookingModalBox(null);
       setShowVoucherModal(true);
       onShowToast(
@@ -272,13 +297,15 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
         'verified',
         'success'
       );
-    }, 900);
+    } else {
+      onShowToast(isEn ? 'Order creation failed. Please check your connection.' : 'فشل إنشاء الطلب. يرجى التحقق من الاتصال والمحاولة لاحقاً.', 'error', 'error');
+    }
   };
 
   // Instant Auto Refund Execution Handler (Direct Supabase Trigger & Ledger)
   const handleAutoRefund = async (amount: number, orderId: string, reason: string) => {
     onDeductWallet(-amount);
-    await executeSupabaseInstantRefund('user-rami-uuid', `TKT-AUTO-${orderId}`, orderId, amount, reason);
+    await executeSupabaseInstantRefund(userProfile?.id || 'anon', `TKT-AUTO-${orderId}`, orderId, amount, reason);
     onShowToast(
       isEn
         ? `⚡ Instant 100% Auto-Refund triggered! ${amount.toLocaleString('en-US')} SYP credited to your wallet.`
@@ -298,8 +325,8 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
     const newTicket: SupportTicket = {
       id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: isEn ? 'Just now' : 'الآن',
-      customerName: 'رامي السعيد',
-      customerPhone: '0944-123456',
+      customerName: userProfile?.name || 'Anonymous',
+      customerPhone: userProfile?.phoneNumber || 'N/A',
       orderId: newTicketOrder.trim() || undefined,
       category: newTicketCategory,
       issueType: 'general',
@@ -321,6 +348,8 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
     );
   };
 
+  const currentVoucher = justBookedVoucher || activeOrderVoucher;
+
   return (
     <div dir={isEn ? 'ltr' : 'rtl'} className="w-full flex flex-col gap-6 relative">
       {/* Consumer Profile Header Bar */}
@@ -337,22 +366,22 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
               <span className="text-xs text-slate-500 font-semibold">{tr.appName}</span>
             </div>
             <h1 className="text-xl font-bold text-[#131b2e] mt-0.5">
-              {isEn ? 'Rescuer: Rami Al-Saeed' : 'المنقذ: رامي السعيد'}
+              {isEn ? `Rescuer: ${userProfile?.name || 'Guest'}` : `المنقذ: ${userProfile?.name || 'ضيف'}`}
             </h1>
             
             {/* Impact Metrics Mini-Dashboard */}
             <div className="flex items-center gap-3 mt-1.5 overflow-x-auto no-scrollbar">
                <div className="flex items-center gap-1 shrink-0">
                  <span className="material-symbols-outlined text-[14px] text-[#006948]">restaurant</span>
-                 <span className="text-[10px] font-bold text-slate-600">12 وجبة منقذة</span>
+                 <span className="text-[10px] font-bold text-slate-600">{orders.length} {isEn ? 'Rescued Baskets' : 'سلال منقذة'}</span>
                </div>
                <div className="flex items-center gap-1 shrink-0">
                  <span className="material-symbols-outlined text-[14px] text-[#006948]">scale</span>
-                 <span className="text-[10px] font-bold text-slate-600">8.5 كغ محفوظ</span>
+                 <span className="text-[10px] font-bold text-slate-600">{(orders.length * 0.7).toFixed(1)} كغ محفوظ</span>
                </div>
                <div className="flex items-center gap-1 shrink-0">
                  <span className="material-symbols-outlined text-[14px] text-[#006948]">eco</span>
-                 <span className="text-[10px] font-bold text-slate-600">18 كغ CO2</span>
+                 <span className="text-[10px] font-bold text-slate-600">{(orders.length * 1.5).toFixed(1)} كغ CO2</span>
                </div>
             </div>
           </div>
@@ -380,7 +409,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
           </div>
 
           <button
-            onClick={() => setActiveSubTab('support')}
+            onClick={() => handleTabChange('support')}
             className="px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
           >
             <span className="material-symbols-outlined text-[#006948] text-[18px]">support_agent</span>
@@ -517,7 +546,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
       {/* Consumer Sub-Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar text-xs font-bold">
         <button
-          onClick={() => setActiveSubTab('catalog')}
+          onClick={() => handleTabChange('catalog')}
           className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
             activeSubTab === 'catalog'
               ? 'bg-[#006948] text-white shadow-sm'
@@ -529,7 +558,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveSubTab('active_orders')}
+          onClick={() => handleTabChange('active_orders')}
           className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
             activeSubTab === 'active_orders'
               ? 'bg-[#006948] text-white shadow-sm'
@@ -541,7 +570,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveSubTab('wallet')}
+          onClick={() => handleTabChange('wallet')}
           className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
             activeSubTab === 'wallet'
               ? 'bg-[#006948] text-white shadow-sm'
@@ -553,7 +582,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveSubTab('impact')}
+          onClick={() => handleTabChange('impact')}
           className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
             activeSubTab === 'impact'
               ? 'bg-[#006948] text-white shadow-sm'
@@ -565,7 +594,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveSubTab('support')}
+          onClick={() => handleTabChange('support')}
           className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
             activeSubTab === 'support'
               ? 'bg-[#006948] text-white shadow-sm'
@@ -619,83 +648,105 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
 
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredBoxes.map((box) => (
-              <div
-                key={box.id}
-                className="bg-white rounded-3xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col group"
-              >
-                <div className="relative h-44 w-full overflow-hidden bg-slate-100">
-                  <img
-                    src={box.image}
-                    alt={box.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  {/* Surprise Box Tag */}
-                  <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} flex flex-col gap-1.5`}>
-                    <div className="bg-[#006948] text-[#85f8c4] font-bold text-[10px] px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 backdrop-blur-md">
-                      <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                      {isEn ? 'Surprise Box' : 'صندوق مفاجآت بركة'}
+            {filteredBoxes.length > 0 ? (
+              filteredBoxes.map((box) => (
+                <div
+                  key={box.id}
+                  className="bg-white rounded-3xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col group"
+                >
+                  <div className="relative h-44 w-full overflow-hidden bg-slate-100">
+                    <img
+                      src={box.image}
+                      alt={box.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    {/* Surprise Box Tag */}
+                    <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} flex flex-col gap-1.5`}>
+                      <div className="bg-[#006948] text-[#85f8c4] font-bold text-[10px] px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 backdrop-blur-md">
+                        <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                        {isEn ? 'Surprise Box' : 'صندوق مفاجآت بركة'}
+                      </div>
+                      <div className="bg-red-600 text-white font-bold text-[10px] px-2 py-1 rounded-lg shadow-lg text-center">
+                        {tr.savePercent} {box.discountPercent}%
+                      </div>
                     </div>
-                    <div className="bg-red-600 text-white font-bold text-[10px] px-2 py-1 rounded-lg shadow-lg text-center">
-                      {tr.savePercent} {box.discountPercent}%
-                    </div>
-                  </div>
-                  
-                  <div className={`absolute top-3 ${isEn ? 'right-3' : 'left-3'} bg-white/90 backdrop-blur-md text-slate-800 text-[11px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1`}>
-                    <span className="material-symbols-outlined text-amber-500 text-[14px]">star</span>
-                    <span>{box.rating}</span>
-                  </div>
-
-                  {/* Real Pickup Countdown (Simulated) */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-white/20 whitespace-nowrap">
-                    <span className="material-symbols-outlined text-[14px] text-amber-400">timer</span>
-                    <span>{isEn ? 'Ends in:' : 'ينتهي خلال:'} 02:45:12</span>
-                  </div>
-                </div>
-
-                <div className="p-4 flex-1 flex flex-col justify-between gap-3">
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                      <span className="font-semibold">{box.vendor}</span>
-                      <span className="text-[#006948] font-bold">
-                        {tr.stockRemaining} {box.stockLeft} {tr.boxesCount}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-slate-900 text-sm leading-snug">{box.title}</h3>
-                    <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">{box.description}</p>
                     
-                    {/* Allergen Warning */}
-                    <div className="mt-2 flex items-center gap-1 text-[9px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
-                      <span className="material-symbols-outlined text-[12px]">warning</span>
-                      {isEn ? 'May contain allergens (Gluten, Dairy)' : 'قد يحتوي على مسببات حساسية (غلوتين، ألبان)'}
+                    <div className={`absolute top-3 ${isEn ? 'right-3' : 'left-3'} bg-white/90 backdrop-blur-md text-slate-800 text-[11px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1`}>
+                      <span className="material-symbols-outlined text-amber-500 text-[14px]">star</span>
+                      <span>{box.rating}</span>
+                    </div>
+
+                    {/* Real Pickup Countdown (Simulated) */}
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-white/20 whitespace-nowrap">
+                      <span className="material-symbols-outlined text-[14px] text-amber-400">timer</span>
+                      <span>{isEn ? 'Ends in:' : 'ينتهي خلال:'} 02:45:12</span>
                     </div>
                   </div>
 
-                  <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+                  <div className="p-4 flex-1 flex flex-col justify-between gap-3">
                     <div>
-                      <span className="text-[10px] text-slate-400 line-through block font-mono leading-none">
-                        {box.originalPrice.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
-                      </span>
-                      <span className="text-base font-bold text-[#006948] font-mono">
-                        {box.discountedPrice.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
-                      </span>
+                      <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                        <span className="font-semibold">{box.vendor}</span>
+                        <span className="text-[#006948] font-bold">
+                          {tr.stockRemaining} {box.stockLeft} {tr.boxesCount}
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-slate-900 text-sm leading-snug">{box.title}</h3>
+                      <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">{box.description}</p>
+                      
+                      {/* Allergen Warning */}
+                      <div className="mt-2 flex items-center gap-1 text-[9px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                        <span className="material-symbols-outlined text-[12px]">warning</span>
+                        {isEn ? 'May contain allergens (Gluten, Dairy)' : 'قد يحتوي على مسببات حساسية (غلوتين، ألبان)'}
+                      </div>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setBookingModalBox(box);
-                        setOrderType(fulfillmentContext);
-                        setPaymentMethod('wallet');
-                      }}
-                      className="px-4 py-2 bg-[#006948] hover:bg-[#00855d] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">shopping_bag</span>
-                      <span>{tr.bookBoxBtn}</span>
-                    </button>
+                    <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 line-through block font-mono leading-none">
+                          {box.originalPrice.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
+                        </span>
+                        <span className="text-base font-bold text-[#006948] font-mono">
+                          {box.discountedPrice.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setBookingModalBox(box);
+                          setOrderType(fulfillmentContext);
+                          setPaymentMethod('wallet');
+                        }}
+                        className="px-4 py-2 bg-[#006948] hover:bg-[#00855d] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">shopping_bag</span>
+                        <span>{tr.bookBoxBtn}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="col-span-full py-16 flex flex-col items-center justify-center text-center bg-slate-50 rounded-[40px] border border-dashed border-slate-200">
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                  <span className="material-symbols-outlined text-[40px] text-slate-300">search_off</span>
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">
+                  {isEn ? 'No surplus boxes found nearby' : 'لا يوجد سلال فائض حالياً في محيطك'}
+                </h3>
+                <p className="text-xs text-slate-500 max-w-xs mt-2 leading-relaxed">
+                  {isEn 
+                    ? 'Try increasing the search radius or check again later in the evening.' 
+                    : 'جرب توسيع نطاق البحث الجغرافي أو عد للمحاولة لاحقاً في المساء.'}
+                </p>
+                <button 
+                  onClick={() => setSearchRadiusKm(15)}
+                  className="mt-6 px-6 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  {isEn ? 'Expand Radius to 15km' : 'توسيع النطاق إلى 15 كم'}
+                </button>
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}
@@ -704,155 +755,183 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
       {activeSubTab === 'active_orders' && (
         <div className="flex flex-col gap-6 animate-in fade-in">
           {/* Active Order Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h2 className="text-lg font-bold text-[#131b2e]">
-                  {isEn ? 'Current Active Reserved Basket' : 'السلة المحجوزة الحالية (النشطة)'}
-                </h2>
-                <p className="text-xs text-slate-500">
-                  {isEn ? 'Show the security PIN code to cashier or report issues instantly' : 'أظهر كود PIN للتاجر بالفرع أو أبلغ عن أي مشكلة فوراً'}
-                </p>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-emerald-100 text-[#006948] text-xs font-bold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>{tr.readyToPickup}</span>
-              </span>
-            </div>
-
-            <div className="bg-[#f2f3ff] rounded-2xl p-5 border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-5">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-md border border-slate-200">
-                  <span className="material-symbols-outlined text-[36px] text-[#006948]">photo_camera</span>
-                </div>
+          {activeOrderVoucher ? (
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
-                  <span className="text-xs font-bold text-slate-400 block font-mono">
-                    {activeOrderVoucher.orderId} • {activeOrderVoucher.governorate}
-                  </span>
-                  <h3 className="font-bold text-base text-slate-900 mt-0.5">{activeOrderVoucher.vendor}</h3>
-                  <p className="text-xs text-slate-600 mt-0.5">{activeOrderVoucher.itemDesc}</p>
+                  <h2 className="text-lg font-bold text-[#131b2e]">
+                    {isEn ? 'Current Active Reserved Basket' : 'السلة المحجوزة الحالية (النشطة)'}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {isEn ? 'Show the security PIN code to cashier or report issues instantly' : 'أظهر كود PIN للتاجر بالفرع أو أبلغ عن أي مشكلة فوراً'}
+                  </p>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-emerald-100 text-[#006948] text-xs font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>{tr.readyToPickup}</span>
+                </span>
+              </div>
+
+              <div className="bg-[#f2f3ff] rounded-2xl p-5 border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-5">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-md border border-slate-200">
+                    <span className="material-symbols-outlined text-[36px] text-[#006948]">photo_camera</span>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 block font-mono">
+                      {activeOrderVoucher.orderId} • {activeOrderVoucher.governorate}
+                    </span>
+                    <h3 className="font-bold text-base text-slate-900 mt-0.5">{activeOrderVoucher.vendor}</h3>
+                    <p className="text-xs text-slate-600 mt-0.5">{activeOrderVoucher.itemDesc}</p>
+                  </div>
+                </div>
+
+                {/* Proof of Delivery Photo Upload/Capture */}
+                <div className="bg-white p-4 rounded-3xl border-2 border-dashed border-[#006948]/20 text-center shadow-sm w-full md:w-64 relative group">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleCapturePhoto}
+                  />
+                  {proofPhoto ? (
+                    <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-50 border border-slate-200">
+                      <img src={proofPhoto} alt="Delivery Proof" className="w-full h-full object-cover" />
+                      <button 
+                        onClick={() => setProofPhoto(null)}
+                        className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">close</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="w-full aspect-square bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-emerald-50 transition-all border border-slate-200 cursor-pointer group disabled:opacity-50"
+                    >
+                      {isUploading ? (
+                        <span className="w-10 h-10 border-4 border-[#006948]/30 border-t-[#006948] rounded-full animate-spin"></span>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[40px] text-slate-400 group-hover:text-[#006948]">add_a_photo</span>
+                          <span className="text-[10px] font-bold text-slate-500 group-hover:text-[#006948]">
+                            {isEn ? 'Snap Proof Photo' : 'التقاط صورة إثبات الاستلام'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Proof of Delivery Photo Upload/Capture */}
-              <div className="bg-white p-4 rounded-3xl border-2 border-dashed border-[#006948]/20 text-center shadow-sm w-full md:w-64 relative group">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  ref={fileInputRef}
-                  onChange={handleCapturePhoto}
-                />
-                {proofPhoto ? (
-                  <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-50 border border-slate-200">
-                    <img src={proofPhoto} alt="Delivery Proof" className="w-full h-full object-cover" />
-                    <button 
-                      onClick={() => setProofPhoto(null)}
-                      className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">close</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="w-full aspect-square bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-emerald-50 transition-all border border-slate-200 cursor-pointer group disabled:opacity-50"
-                  >
-                    {isUploading ? (
-                      <span className="w-10 h-10 border-4 border-[#006948]/30 border-t-[#006948] rounded-full animate-spin"></span>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-[40px] text-slate-400 group-hover:text-[#006948]">add_a_photo</span>
-                        <span className="text-[10px] font-bold text-slate-500 group-hover:text-[#006948]">
-                          {isEn ? 'Snap Proof Photo' : 'التقاط صورة إثبات الاستلام'}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                )}
+              {/* Action Bar for this Order */}
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <button
+                  onClick={async () => {
+                    if (!proofPhoto) {
+                      onShowToast(isEn ? 'Please capture a proof photo first!' : 'يرجى التقاط صورة الإثبات أولاً!', 'warning', 'error');
+                      return;
+                    }
+                    if (activeOrder) {
+                      await updateOrderStatus(activeOrder.id, 'delivered', proofPhoto);
+                      onShowToast(isEn ? 'Receipt Confirmed via Photo Proof!' : 'تم تأكيد الاستلام عبر إثبات الصورة بنجاح!', 'verified', 'success');
+                    }
+                  }}
+                  className={`px-4 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${proofPhoto ? 'bg-[#006948] text-white shadow-md' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
+                  <span>{isEn ? 'Confirm Receipt' : 'تأكيد تملك واستلام السلة'}</span>
+                </button>
+
+                {/* Order-Linked Support CTA */}
+                <button
+                  onClick={() =>
+                    activeOrderVoucher && setOrderHelpTarget({
+                      id: activeOrderVoucher.orderId,
+                      vendor: activeOrderVoucher.vendor,
+                      itemDesc: activeOrderVoucher.itemDesc,
+                      amount: activeOrderVoucher.amount,
+                      governorate: activeOrderVoucher.governorate,
+                      pickupTime: activeOrderVoucher.pickupTime,
+                    })
+                  }
+                  className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px] text-amber-700">help_center</span>
+                  <span>{tr.needHelpWithOrder}</span>
+                </button>
               </div>
             </div>
-
-            {/* Action Bar for this Order */}
-            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <button
-                onClick={() => {
-                  if (!proofPhoto) {
-                    onShowToast(isEn ? 'Please capture a proof photo first!' : 'يرجى التقاط صورة الإثبات أولاً!', 'warning', 'error');
-                    return;
-                  }
-                  onShowToast(isEn ? 'Receipt Confirmed via Photo Proof!' : 'تم تأكيد الاستلام عبر إثبات الصورة بنجاح!', 'verified', 'success');
-                }}
-                className={`px-4 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${proofPhoto ? 'bg-[#006948] text-white shadow-md' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}
-              >
-                <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
-                <span>{isEn ? 'Confirm Receipt' : 'تأكيد تملك واستلام السلة'}</span>
-              </button>
-
-              {/* Order-Linked Support CTA */}
-              <button
-                onClick={() =>
-                  setOrderHelpTarget({
-                    id: activeOrderVoucher.orderId,
-                    vendor: activeOrderVoucher.vendor,
-                    itemDesc: activeOrderVoucher.itemDesc,
-                    amount: activeOrderVoucher.amount,
-                    governorate: activeOrderVoucher.governorate,
-                    pickupTime: activeOrderVoucher.pickupTime,
-                  })
-                }
-                className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[18px] text-amber-700">help_center</span>
-                <span>{tr.needHelpWithOrder}</span>
-              </button>
+          ) : (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center gap-4">
+               <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+                  <span className="material-symbols-outlined text-[32px]">shopping_basket</span>
+               </div>
+               <div>
+                  <h3 className="font-bold text-slate-800">{isEn ? 'No Active Orders' : 'لا يوجد طلبات نشطة حالياً'}</h3>
+                  <p className="text-xs text-slate-500 mt-1">{isEn ? 'Baskets you book will appear here.' : 'السلال التي تقوم بحجزها ستظهر هنا لتتمكن من استلامها.'}</p>
+               </div>
+               <button onClick={() => setActiveSubTab('catalog')} className="mt-2 px-6 py-2 bg-[#006948] text-white rounded-xl text-xs font-bold shadow-md hover:bg-[#00855d] transition-all">
+                  {isEn ? 'Browse Baskets' : 'تصفح السلال المتاحة'}
+               </button>
             </div>
-          </div>
+          )}
 
           {/* Past Completed Order with Help CTA */}
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col gap-4">
             <h3 className="font-bold text-sm text-slate-900">
               {isEn ? 'Past Completed Orders Archive:' : 'سجل الطلبات السابقة المكتملة:'}
             </h3>
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-[#006948] flex items-center justify-center font-bold">
-                  ✓
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900">{pastCompletedOrder.vendor}</span>
-                    <span className="font-mono text-slate-400 text-[10px]">{pastCompletedOrder.orderId}</span>
-                  </div>
-                  <span className="text-slate-500 text-[11px] block">{pastCompletedOrder.itemDesc}</span>
-                  <span className="text-slate-400 text-[10px]">{pastCompletedOrder.pickupTime}</span>
-                </div>
-              </div>
+            {orders.filter(o => o.status === 'delivered').length > 0 ? (
+              <div className="flex flex-col gap-3">
+                {orders.filter(o => o.status === 'delivered').map(pastOrder => (
+                  <div key={pastOrder.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-[#006948] flex items-center justify-center font-bold">
+                        ✓
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">{pastOrder.storeName}</span>
+                          <span className="font-mono text-slate-400 text-[10px]">#BB-{pastOrder.id}</span>
+                        </div>
+                        <span className="text-slate-500 text-[11px] block">{pastOrder.boxTitle}</span>
+                        <span className="text-slate-400 text-[10px]">{pastOrder.orderPlacedAt}</span>
+                      </div>
+                    </div>
 
-              <div className="flex items-center gap-3">
-                <span className="font-mono font-bold text-slate-800 text-sm">
-                  {pastCompletedOrder.amount.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
-                </span>
-                <button
-                  onClick={() =>
-                    setOrderHelpTarget({
-                      id: pastCompletedOrder.orderId,
-                      vendor: pastCompletedOrder.vendor,
-                      itemDesc: pastCompletedOrder.itemDesc,
-                      amount: pastCompletedOrder.amount,
-                      governorate: pastCompletedOrder.governorate,
-                      pickupTime: pastCompletedOrder.pickupTime,
-                    })
-                  }
-                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold rounded-xl flex items-center gap-1 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[15px] text-amber-600">report_problem</span>
-                  <span>{tr.reportQualityIssue}</span>
-                </button>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-slate-800 text-sm">
+                        {pastOrder.price.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setOrderHelpTarget({
+                            id: `#BB-${pastOrder.id}`,
+                            vendor: pastOrder.storeName,
+                            itemDesc: pastOrder.boxTitle,
+                            amount: pastOrder.price,
+                            governorate: pastOrder.governorate,
+                            pickupTime: pastOrder.pickupWindow,
+                          })
+                        }
+                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold rounded-xl flex items-center gap-1 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[15px] text-amber-600">report_problem</span>
+                        <span>{tr.reportQualityIssue}</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs italic">
+                 {isEn ? 'No past orders found in your history.' : 'لم يتم العثور على طلبات سابقة في سجلك.'}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1614,7 +1693,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
       )}
 
       {/* Voucher Modal */}
-      {showVoucherModal && (
+      {showVoucherModal && currentVoucher && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div
             dir={isEn ? 'ltr' : 'rtl'}
@@ -1628,7 +1707,7 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
                 {isEn ? 'Pickup Security Voucher' : 'وثيقة استلام سلة بركة'}
               </h4>
               <p className="text-xs text-slate-500">
-                {activeOrderVoucher.vendor} ({activeOrderVoucher.governorate})
+                {currentVoucher.vendor} ({currentVoucher.governorate})
               </p>
             </div>
 
@@ -1637,36 +1716,36 @@ export const ConsumerPortal: React.FC<ConsumerPortalProps> = ({
                 {isEn ? 'Security Redemption PIN' : 'الرمز السري للاستلام (PIN)'}
               </span>
               <span className="font-mono text-2xl font-bold text-[#006948] tracking-widest bg-white py-1.5 px-4 rounded-xl shadow-sm border border-slate-200">
-                {activeOrderVoucher.pin}
+                {currentVoucher.pin}
               </span>
             </div>
 
             <div className={`w-full flex flex-col gap-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100 ${isEn ? 'text-left' : 'text-right'}`}>
               <div className="flex justify-between">
                 <span>{isEn ? 'Order Reference:' : 'رقم الحجز:'}</span>
-                <span className="font-bold text-slate-900 font-mono">{activeOrderVoucher.orderId}</span>
+                <span className="font-bold text-slate-900 font-mono">{currentVoucher.orderId}</span>
               </div>
               <div className="flex justify-between">
                 <span>{isEn ? 'Payment:' : 'طريقة السداد:'}</span>
-                <span className="font-bold text-[#006948]">{activeOrderVoucher.paymentMethod}</span>
+                <span className="font-bold text-[#006948]">{currentVoucher.paymentMethod}</span>
               </div>
               <div className="flex justify-between">
                 <span>{isEn ? 'Total Amount:' : 'المبلغ:'}</span>
                 <span className="font-bold text-slate-900 font-mono">
-                  {activeOrderVoucher.amount.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
+                  {currentVoucher.amount.toLocaleString(isEn ? 'en-US' : 'ar-SY')} {tr.currency}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>{isEn ? 'Method:' : 'طريقة الاستلام:'}</span>
                 <span className="font-bold text-slate-800">
-                  {activeOrderVoucher.orderType === 'pickup'
+                  {currentVoucher.orderType === 'pickup'
                     ? isEn ? 'In-Store Self Pickup' : 'استلام ذاتي من الفرع'
                     : isEn ? 'Home Delivery by Captain' : 'توصيل منزلي بالكابتن'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>{isEn ? 'Pickup Window:' : 'نافذة الاستلام:'}</span>
-                <span className="font-bold text-slate-800">{activeOrderVoucher.pickupTime}</span>
+                <span className="font-bold text-slate-800">{currentVoucher.pickupTime}</span>
               </div>
             </div>
 

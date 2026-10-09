@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Language, AccountType, UserProfile } from '../types';
 import { t } from '../data/translations';
 import { motion, AnimatePresence } from 'framer-motion';
-import { uploadFileToSupabase } from '../db/supabaseClient';
+import { uploadFileToSupabase, verifyUserCredentials, registerUserInDb } from '../db/supabaseClient';
 
 interface AuthPortalProps {
   onLoginSuccess: (profile: UserProfile) => void;
@@ -36,6 +36,10 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showOtpStep, setShowOtpStep] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [tempProfile, setTempProfile] = useState<UserProfile | null>(null);
+  const [tempPassword, setTempPassword] = useState<string | undefined>(undefined);
 
   const categories = [
     { id: 'produce', ar: 'خضار وفواكه', en: 'Fruits & Veggies', icon: 'eco' },
@@ -45,34 +49,77 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
     { id: 'sweets', ar: 'حلويات', en: 'Sweets', icon: 'icecream' },
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsVerifying(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsVerifying(false);
-      // Fixed Admin Code for Dev/Testing: 1234
-      if (mode === 'admin' && adminCode !== '1234' && adminCode !== '9921') {
-        alert(isEn ? 'Invalid Admin Code! (Use 1234 for testing)' : 'رمز الأمان الخاص بالإدارة غير صحيح! (استخدم 1234 للتجربة)');
-        return;
+    try {
+      if (authType === 'signin') {
+        const identifier = mode === 'admin' ? email : (phoneNumber || email);
+        const profile = await verifyUserCredentials(identifier, mode === 'consumer' ? undefined : password, mode === 'partner' ? 'merchant' : mode);
+        
+        if (profile) {
+          setTempProfile(profile);
+          setShowOtpStep(true);
+          // In a real app, this would trigger an SMS/Email
+          console.log("OTP Sent: 8822");
+        } else {
+          alert(isEn ? 'Invalid credentials or role!' : 'بيانات الدخول غير صحيحة أو الدور غير مطابق!');
+        }
+      } else {
+        // Sign Up
+        if (mode === 'admin' && adminCode !== '1234' && adminCode !== '9921') {
+          alert(isEn ? 'Invalid Admin Security Pin!' : 'رمز الأمان الخاص بالإدارة غير صحيح!');
+          setIsVerifying(false);
+          return;
+        }
+
+        const newProfile: UserProfile = {
+          id: `USR-${Math.floor(Math.random() * 90000) + 10000}`,
+          name: name || (mode === 'consumer' ? 'المنقذ الشامي' : 'شريك بركة'),
+          role: mode === 'partner' ? 'merchant' : mode,
+          phoneNumber: phoneNumber,
+          email: email,
+          storeName: mode === 'partner' ? storeName : undefined,
+          storeCategory: mode === 'partner' ? storeCategory : undefined,
+          licenseUrl: storeDocUrl || undefined,
+          location: gpsLocation ? { lat: gpsLocation.lat, lng: gpsLocation.lng, address: isEn ? 'Verified via GPS' : 'تم التوثيق عبر GPS' } : undefined
+        };
+
+        setTempProfile(newProfile);
+        setTempPassword(mode === 'consumer' ? undefined : password);
+        setShowOtpStep(true);
+        console.log("OTP Sent: 8822");
       }
+    } catch (err) {
+      console.error(err);
+      alert(isEn ? 'Database connection error' : 'فشل الاتصال بقاعدة البيانات');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
-      const profile: UserProfile = {
-        id: `USR-${Math.floor(Math.random() * 10000)}`,
-        name: mode === 'consumer' ? (name || 'المنقذ الشامي') : (name || 'شريك بركة'),
-        role: mode === 'partner' ? 'merchant' : mode,
-        phoneNumber: phoneNumber || email,
-        email: email,
-        storeName: mode === 'partner' ? storeName : undefined,
-        storeCategory: mode === 'partner' ? storeCategory : undefined,
-        licenseNumber: mode === 'partner' ? `SY-LIC-${Math.floor(Math.random() * 9000 + 1000)}` : undefined,
-        licenseUrl: storeDocUrl || undefined,
-        location: gpsLocation ? { lat: gpsLocation.lat, lng: gpsLocation.lng, address: isEn ? 'Verified via GPS' : 'تم التوثيق عبر GPS' } : undefined
-      };
+  const handleVerifyOtp = async () => {
+    if (otpCode !== '8822') {
+      alert(isEn ? 'Invalid verification code!' : 'رمز التحقق غير صحيح!');
+      return;
+    }
 
-      onLoginSuccess(profile);
-    }, 1500);
+    if (!tempProfile) return;
+
+    setIsVerifying(true);
+    if (authType === 'signup') {
+      const success = await registerUserInDb(tempProfile, tempPassword);
+      if (success) {
+        onLoginSuccess(tempProfile);
+      } else {
+        alert(isEn ? 'Registration failed. Try a different phone/email.' : 'فشل التسجيل. يرجى استخدام رقم هاتف أو بريد مختلف.');
+        setShowOtpStep(false);
+      }
+    } else {
+      onLoginSuccess(tempProfile);
+    }
+    setIsVerifying(false);
   };
 
   return (
@@ -115,8 +162,60 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       </div>
 
       <div className="p-8">
-        {/* Auth Type Toggle */}
-        <div className="flex bg-slate-100 p-1 rounded-2xl mb-8">
+        {showOtpStep ? (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+                <span className="material-symbols-outlined text-[32px] text-[#006948] animate-pulse">phonelink_ring</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">
+                {isEn ? 'Verify your identity' : 'تأكيد الهوية'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                {isEn 
+                  ? `We've sent a 4-digit code to ${email || phoneNumber}. For testing, use 8822`
+                  : `تم إرسال رمز من 4 أرقام إلى ${email || phoneNumber}. للتجربة استخدم 8822`}
+              </p>
+            </div>
+
+            <div className="flex justify-center gap-3">
+              <input
+                type="text"
+                maxLength={4}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-4 py-4 text-center text-3xl font-black tracking-[1em] text-[#006948] outline-none focus:border-[#006948] transition-all"
+                placeholder="••••"
+                autoFocus
+              />
+            </div>
+
+            <button
+              onClick={handleVerifyOtp}
+              disabled={isVerifying || otpCode.length < 4}
+              className="w-full bg-[#006948] hover:bg-[#00855d] text-white font-bold py-4 rounded-2xl shadow-lg shadow-[#006948]/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isVerifying ? (
+                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined">verified_user</span>
+                  <span>{isEn ? 'Confirm & Secure Account' : 'تأكيد وتأمين الحساب'}</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setShowOtpStep(false)}
+              className="w-full text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors text-center uppercase tracking-widest"
+            >
+              {isEn ? 'Back to details' : 'العودة لتعديل البيانات'}
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Auth Type Toggle */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl mb-8">
           <button
             onClick={() => setAuthType('signin')}
             className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -365,7 +464,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
             )}
           </div>
         )}
-      </div>
-    </motion.div>
+      </>
+    )}
+  </div>
+</motion.div>
   );
 };

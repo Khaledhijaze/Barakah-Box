@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Language, RewardRule } from '../types';
+import { Language, RewardRule, OrderItem, UserProfile } from '../types';
 import { t } from '../data/translations';
 
 interface ImpactReportProps {
@@ -9,6 +9,8 @@ interface ImpactReportProps {
   onCreditWallet?: (amount: number) => void;
   lang?: Language;
   rewardRules?: RewardRule[];
+  orders?: OrderItem[];
+  userProfile?: UserProfile | null;
 }
 
 export const ImpactReport: React.FC<ImpactReportProps> = ({
@@ -16,6 +18,8 @@ export const ImpactReport: React.FC<ImpactReportProps> = ({
   onCreditWallet,
   lang = 'ar',
   rewardRules = [],
+  orders = [],
+  userProfile,
 }) => {
   const isEn = lang === 'en';
   const tr = t[lang];
@@ -24,14 +28,16 @@ export const ImpactReport: React.FC<ImpactReportProps> = ({
   const [hasClaimedMilestone, setHasClaimedMilestone] = useState(false);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
 
-  // Consumer's personal metrics
+  // Consumer's personal metrics calculated from real orders
+  const deliveredOrders = orders.filter(o => o.status === 'delivered');
+  
   const consumerStats = {
-    boxesSaved: 14,
-    moneySavedSyp: 128500,
-    foodMassKg: 38.5,
-    co2OffsetKg: 82.0,
-    waterSavedLiters: 14200,
-    activeStreakDays: 6,
+    boxesSaved: deliveredOrders.length,
+    moneySavedSyp: deliveredOrders.reduce((acc, o) => acc + (o.price * 1.5), 0), // Simulating savings
+    foodMassKg: Number((deliveredOrders.length * 0.7).toFixed(1)),
+    co2OffsetKg: Number((deliveredOrders.length * 1.5).toFixed(1)),
+    waterSavedLiters: deliveredOrders.length * 450,
+    activeStreakDays: 3, // Could be calculated but keeping simple for now
   };
 
   // Dynamically find active milestones from reward rules
@@ -79,7 +85,7 @@ export const ImpactReport: React.FC<ImpactReportProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-bold text-[#131b2e]">
-                  {isEn ? 'Customer: Rami Al-Saeed' : 'المستهلك: رامي السعيد'}
+                  {isEn ? `Customer: ${userProfile?.name || 'Rami Al-Saeed'}` : `المستهلك: ${userProfile?.name || 'رامي السعيد'}`}
                 </h1>
                 <span className="inline-flex items-center gap-1 bg-[#85f8c4] px-2.5 py-0.5 rounded-full text-[#002114] text-xs font-bold">
                   <span className="material-symbols-outlined text-[14px]">eco</span>
@@ -283,19 +289,19 @@ export const ImpactReport: React.FC<ImpactReportProps> = ({
               </h3>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                 {isEn
-                  ? 'Presented to Rami Al-Saeed for actively rescuing 14 surprise food boxes and offsetting 82 KG of CO2 in Syria.'
-                  : 'تُمنح للمستهلك رامي السعيد تقديراً لمشاركته الفعالة في إنقاذ 14 سلة بركة وتفادي 82 كغ من انبعاثات الكربون في الجمهورية العربية السورية.'}
+                  ? `Presented to ${userProfile?.name || 'Rami Al-Saeed'} for actively rescuing ${consumerStats.boxesSaved} surprise food boxes and offsetting ${consumerStats.co2OffsetKg} KG of CO2 in Syria.`
+                  : `تُمنح للمستهلك ${userProfile?.name || 'رامي السعيد'} تقديراً لمشاركته الفعالة في إنقاذ ${consumerStats.boxesSaved} سلة بركة وتفادي ${consumerStats.co2OffsetKg} كغ من انبعاثات الكربون في الجمهورية العربية السورية.`}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 w-full bg-[#f2f3ff] p-4 rounded-2xl text-xs border border-slate-200">
               <div className="text-center">
                 <span className="text-slate-500 block text-[10px]">{isEn ? 'Boxes Rescued' : 'سلال تم إنقاذها'}</span>
-                <span className="font-bold font-mono text-base text-[#006948]">14 {tr.boxesCount}</span>
+                <span className="font-bold font-mono text-base text-[#006948]">{consumerStats.boxesSaved} {tr.boxesCount}</span>
               </div>
               <div className="text-center">
                 <span className="text-slate-500 block text-[10px]">{isEn ? 'CO2 Avoided' : 'انبعاثات CO2'}</span>
-                <span className="font-bold font-mono text-base text-[#0058be]">82.0 kg</span>
+                <span className="font-bold font-mono text-base text-[#0058be]">{consumerStats.co2OffsetKg} kg</span>
               </div>
             </div>
 

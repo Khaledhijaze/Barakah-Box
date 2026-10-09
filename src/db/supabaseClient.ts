@@ -5,7 +5,7 @@
  */
 
 import { GovernorateItem, DistrictItem } from '../data/geographyData';
-import { SupportTicket, RewardRule } from '../types';
+import { SupportTicket, RewardRule, BarakahBox, OrderItem, DisputeIncident, CommissionTier, AuditLog, MerchantComplaint, UserProfile, AccountType } from '../types';
 
 export interface WalletRecord {
   user_id: string;
@@ -17,6 +17,222 @@ export interface WalletRecord {
   updated_at: string;
 }
 
+/**
+ * Fetch User Wallet Balance from Supabase
+ */
+export async function fetchUserWalletBalance(userId: string): Promise<number> {
+  const data = await supabaseFetch('wallets', `select=balance_syp&user_id=eq.${userId}&limit=1`);
+  if (Array.isArray(data) && data.length > 0) {
+    return Number(data[0].balance_syp);
+  }
+  return 0;
+}
+
+/**
+ * Verify User Credentials (Simulated secure check via Supabase RPC or select)
+ */
+export async function verifyUserCredentials(
+  identifier: string,
+  password?: string,
+  role?: string
+): Promise<UserProfile | null> {
+  // In a real production app, this would use Supabase Auth (auth.signInWithPassword)
+  // Here we use the rest API as per existing pattern for a custom 'users' table
+  let filter = `select=*&or=(phone_number.eq.${identifier},email.eq.${identifier})`;
+  if (role) filter += `&role=eq.${role}`;
+  
+  const data = await supabaseFetch('users', filter);
+  if (Array.isArray(data) && data.length > 0) {
+    const u = data[0];
+    // Check password if provided (assuming plain text for this demo environment, 
+    // though in reality it would be hashed or handled by Supabase Auth)
+    if (password && u.password && u.password !== password) return null;
+    
+    return {
+      id: u.id,
+      name: u.name,
+      role: u.role as AccountType,
+      phoneNumber: u.phone_number,
+      email: u.email,
+      storeName: u.store_name,
+      storeCategory: u.store_category,
+      licenseNumber: u.license_number,
+      licenseUrl: u.license_url,
+      location: u.location_json ? JSON.parse(u.location_json) : undefined
+    };
+  }
+  return null;
+}
+
+/**
+ * Update Order Status in Supabase
+ */
+export async function updateOrderStatus(orderId: string, status: string, proofPhotoUrl?: string): Promise<boolean> {
+  try {
+    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      const body: any = { status };
+      if (proofPhotoUrl) body.proof_photo_url = proofPhotoUrl;
+
+      const res = await fetch(`${supabaseUrl}/rest/v1/orders?id=eq.${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(body),
+      });
+      return res.ok;
+    }
+  } catch (err) {
+    console.error('Order update error:', err);
+  }
+  return false;
+}
+
+/**
+ * Fetch All Users from Supabase (Optionally filtered by role)
+ */
+export async function fetchUsersFromDb(role?: string): Promise<UserProfile[]> {
+  let filter = 'select=*';
+  if (role) filter += `&role=eq.${role}`;
+  
+  const data = await supabaseFetch('users', filter);
+  if (Array.isArray(data)) {
+    return data.map((u: any) => ({
+      id: u.id,
+      name: u.name,
+      role: u.role as AccountType,
+      phoneNumber: u.phone_number,
+      email: u.email,
+      storeName: u.store_name,
+      storeCategory: u.store_category,
+      licenseNumber: u.license_number,
+      licenseUrl: u.license_url,
+      location: u.location_json ? JSON.parse(u.location_json) : undefined
+    }));
+  }
+  return [];
+}
+
+/**
+ * Update User Password in Supabase
+ */
+export async function updateUserPassword(userId: string, newPassword: string): Promise<boolean> {
+  try {
+    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      const res = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          password: newPassword
+        }),
+      });
+      return res.ok;
+    }
+  } catch (err) {
+    console.error('Password update error:', err);
+  }
+  return false;
+}
+
+/**
+ * Register New User in Supabase
+ */
+export async function registerUserInDb(profile: UserProfile, password?: string): Promise<boolean> {
+  try {
+    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      // 1. Create User
+      const userRes = await fetch(`${supabaseUrl}/rest/v1/users`, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          id: profile.id,
+          name: profile.name,
+          role: profile.role,
+          phone_number: profile.phoneNumber,
+          email: profile.email,
+          password: password || 'barakah123', // Default for rescuer
+          store_name: profile.storeName,
+          store_category: profile.storeCategory,
+          license_number: profile.licenseNumber,
+          license_url: profile.licenseUrl,
+          location_json: profile.location ? JSON.stringify(profile.location) : null
+        }),
+      });
+
+      if (!userRes.ok) return false;
+
+      // 2. Initialize Wallet
+      await fetch(`${supabaseUrl}/rest/v1/wallets`, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          user_id: profile.id,
+          full_name: profile.name,
+          phone_number: profile.phoneNumber || '',
+          governorate: 'دمشق',
+          balance_syp: 0,
+          is_frozen: false
+        }),
+      });
+
+      return true;
+    }
+  } catch (err) {
+    console.error('Registration error:', err);
+  }
+  return false;
+}
+
+/**
+ * Generic Supabase Fetch Helper
+ */
+async function supabaseFetch(table: string, query = 'select=*') {
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+      },
+    });
+    if (res.ok) return await res.json();
+  } catch (err) {
+    console.error(`Error fetching from ${table}:`, err);
+  }
+  return null;
+}
+
 // In-memory synced state mirroring Supabase tables
 let cachedGovernorates: GovernorateItem[] = [];
 let cachedDistricts: DistrictItem[] = [];
@@ -25,68 +241,282 @@ let cachedDistricts: DistrictItem[] = [];
  * Fetch dynamic governorates hierarchy from database
  */
 export async function fetchGovernoratesFromDb(): Promise<GovernorateItem[]> {
-  try {
-    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseAnonKey) {
-      const res = await fetch(`${supabaseUrl}/rest/v1/governorates?select=*&is_active=eq.true&order=name_en.asc`, {
-        headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          cachedGovernorates = data;
-          return data;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Falling back to local dynamic geography cache:', err);
+  const data = await supabaseFetch('governorates', 'select=*&is_active=eq.true&order=name_en.asc');
+  if (Array.isArray(data) && data.length > 0) {
+    cachedGovernorates = data;
+    return data;
   }
-
-  // Fallback to seeded data
-  const { SYRIAN_GOVERNORATES } = await import('../data/geographyData');
-  cachedGovernorates = SYRIAN_GOVERNORATES;
-  return SYRIAN_GOVERNORATES;
+  return [];
 }
 
 /**
  * Fetch dynamic districts hierarchy from database
  */
 export async function fetchDistrictsFromDb(governorateId?: string): Promise<DistrictItem[]> {
+  const filter = governorateId && governorateId !== 'all' ? `&governorate_id=eq.${governorateId}` : '';
+  const data = await supabaseFetch('districts', `select=*&is_active=eq.true${filter}&order=name_en.asc`);
+  if (Array.isArray(data) && data.length > 0) {
+    cachedDistricts = data;
+    return data;
+  }
+  return [];
+}
+
+/**
+ * Fetch All Boxes (Baskets) from Supabase
+ */
+export async function fetchBoxesFromDb(): Promise<BarakahBox[]> {
+  const data = await supabaseFetch('boxes', 'select=*&stock_left=gt.0&order=created_at.desc');
+  if (Array.isArray(data)) {
+    return data.map((d: any) => ({
+      id: d.id,
+      vendor: d.vendor,
+      vendor_en: d.vendor_en,
+      vendorCategory: d.vendor_category,
+      categoryLabel: d.category_label,
+      categoryLabel_en: d.category_label_en,
+      title: d.title,
+      title_en: d.title_en,
+      description: d.description,
+      description_en: d.description_en,
+      rating: Number(d.rating),
+      reviewsCount: Number(d.reviews_count),
+      originalPrice: Number(d.original_price),
+      discountedPrice: Number(d.discounted_price),
+      discountPercent: Number(d.discount_percent),
+      distanceKm: Number(d.distance_km || 1.5),
+      governorate: d.governorate,
+      neighborhood: d.neighborhood,
+      neighborhood_en: d.neighborhood_en,
+      stockLeft: Number(d.stock_left),
+      pickupStart: d.pickup_start,
+      pickupEnd: d.pickup_end,
+      image: d.image_url || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=800',
+    }));
+  }
+  return [];
+}
+
+/**
+ * Fetch Orders from Supabase
+ */
+export async function fetchOrdersFromDb(role?: string, identifier?: string): Promise<OrderItem[]> {
+  let filter = 'select=*&order=order_placed_at.desc';
+  if (role === 'merchant' && identifier) filter += `&store_name=eq.${identifier}`;
+  if (role === 'consumer' && identifier) filter += `&customer_phone=eq.${identifier}`;
+
+  const data = await supabaseFetch('orders', filter);
+  if (Array.isArray(data)) {
+    return data.map((d: any) => ({
+      id: d.id,
+      customerName: d.customer_name,
+      customerPhone: d.customer_phone,
+      governorate: d.governorate,
+      cityArea: d.city_area,
+      deliveryAddress: d.delivery_address,
+      storeName: d.store_name,
+      storePhone: d.store_phone,
+      boxTitle: d.box_title,
+      orderType: d.order_type,
+      price: Number(d.price),
+      merchantNet: Number(d.merchant_net),
+      driverFee: Number(d.driver_fee || 0),
+      driverName: d.driver_name,
+      driverPhone: d.driver_phone,
+      pickupWindow: d.pickup_window,
+      status: d.status,
+      orderPlacedAt: d.order_placed_at,
+      paymentMethod: d.payment_method,
+      securityPin: d.security_pin,
+      financialSplit: d.financial_split || {
+        totalCustomerPaid: Number(d.price),
+        merchantShare: Number(d.merchant_net),
+        driverShare: Number(d.driver_fee || 0),
+        platformOperationalFee: Number(d.price) - Number(d.merchant_net) - Number(d.driver_fee || 0),
+        currency: 'ل.س'
+      },
+      lifecycle: d.lifecycle || []
+    }));
+  }
+  return [];
+}
+
+/**
+ * Create a new order in Supabase
+ */
+export async function createOrderInDb(order: OrderItem): Promise<boolean> {
   try {
     const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
     const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
 
     if (supabaseUrl && supabaseAnonKey) {
-      const filter = governorateId && governorateId !== 'all' ? `&governorate_id=eq.${governorateId}` : '';
-      const res = await fetch(`${supabaseUrl}/rest/v1/districts?select=*&is_active=eq.true${filter}&order=name_en.asc`, {
+      const res = await fetch(`${supabaseUrl}/rest/v1/orders`, {
+        method: 'POST',
         headers: {
           apikey: supabaseAnonKey,
           Authorization: `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
         },
+        body: JSON.stringify({
+          id: order.id.replace('#BB-', ''),
+          customer_name: order.customerName,
+          customer_phone: order.customerPhone,
+          governorate: order.governorate,
+          city_area: order.cityArea,
+          delivery_address: order.deliveryAddress,
+          store_name: order.storeName,
+          store_phone: order.storePhone,
+          box_title: order.boxTitle,
+          order_type: order.orderType,
+          price: order.price,
+          merchant_net: order.merchantNet,
+          driver_fee: order.driverFee,
+          pickup_window: order.pickupWindow,
+          status: order.status,
+          order_placed_at: order.orderPlacedAt,
+          payment_method: order.paymentMethod,
+          security_pin: order.securityPin,
+          financial_split: order.financialSplit,
+          lifecycle: order.lifecycle
+        }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          cachedDistricts = data;
-          return data;
-        }
-      }
+      return res.ok;
     }
   } catch (err) {
-    console.warn('Falling back to local district cache:', err);
+    console.error('Order creation error:', err);
   }
+  return false;
+}
 
-  const { SYRIAN_DISTRICTS } = await import('../data/geographyData');
-  if (governorateId && governorateId !== 'all') {
-    return SYRIAN_DISTRICTS.filter((d) => d.governorate_id === governorateId);
+/**
+ * Fetch Disputes from Supabase
+ */
+export async function fetchDisputesFromDb(): Promise<DisputeIncident[]> {
+  const data = await supabaseFetch('disputes', 'select=*&order=time_exact.desc');
+  if (Array.isArray(data)) {
+    return data.map((d: any) => ({
+      id: d.id,
+      orderNumber: d.order_number,
+      governorate: d.governorate,
+      timeAgo: d.time_ago,
+      timeExact: d.time_exact,
+      merchantName: d.merchant_name,
+      customerName: d.customer_name,
+      customerWallet: d.customer_wallet,
+      totalAmount: Number(d.total_amount),
+      reason: d.reason,
+      status: d.status,
+      withFine: Boolean(d.with_fine)
+    }));
   }
-  return SYRIAN_DISTRICTS;
+  const { INITIAL_DISPUTES } = await import('../data/mockData');
+  return INITIAL_DISPUTES;
+}
+
+/**
+ * Fetch Commission Tiers from Supabase
+ */
+export async function fetchCommissionsFromDb(): Promise<CommissionTier[]> {
+  const data = await supabaseFetch('commission_tiers', 'select=*&order=rate_percent.asc');
+  if (Array.isArray(data)) {
+    return data.map((d: any) => ({
+      id: d.id,
+      category: d.category,
+      ratePercent: Number(d.rate_percent),
+      monthlyFee: Number(d.monthly_fee || 0),
+      partnersCount: Number(d.partners_count),
+      subLabel: d.sub_label,
+      badgeText: d.badge_text,
+      icon: d.icon
+    }));
+  }
+  const { INITIAL_COMMISSIONS } = await import('../data/mockData');
+  return INITIAL_COMMISSIONS;
+}
+
+/**
+ * Fetch Audit Logs from Supabase
+ */
+export async function fetchAuditLogsFromDb(): Promise<AuditLog[]> {
+  const data = await supabaseFetch('audit_logs', 'select=*&order=timestamp.desc&limit=50');
+  if (Array.isArray(data)) {
+    return data.map((d: any) => ({
+      id: d.id,
+      timestamp: d.timestamp,
+      uuid: d.uuid,
+      governorate: d.governorate,
+      verificationMethod: d.verification_method || 'OTP / PIN',
+      storeName: d.store_name || 'N/A',
+      driverName: d.driver_name || 'N/A',
+      customerName: d.customer_name || 'N/A',
+      destination: d.destination || 'N/A',
+      gpsCoords: d.gps_coords || 'N/A',
+      status: d.status,
+      note: d.note || ''
+    }));
+  }
+  const { INITIAL_AUDIT_LOGS } = await import('../data/mockData');
+  return INITIAL_AUDIT_LOGS;
+}
+
+/**
+ * Fetch Merchant Complaints from Supabase
+ */
+export async function fetchMerchantComplaintsFromDb(merchantName?: string): Promise<MerchantComplaint[]> {
+  let filter = 'select=*&order=created_at.desc';
+  if (merchantName) filter += `&merchant_name=eq.${merchantName}`;
+
+  const data = await supabaseFetch('merchant_complaints', filter);
+  if (Array.isArray(data)) {
+    return data.map((d: any) => ({
+      id: d.id,
+      createdAt: d.created_at,
+      merchantName: d.merchant_name,
+      branch: d.branch,
+      orderNumber: d.order_number,
+      customerName: d.customer_name,
+      complaintType: d.complaint_type,
+      priority: d.priority,
+      description: d.description,
+      status: d.status,
+      isNoShowClaim: Boolean(d.is_no_show_claim),
+      payoutReleased: Boolean(d.payout_released),
+      payoutAmount: Number(d.payout_amount || 0),
+      adminNotes: d.admin_notes
+    }));
+  }
+  return [];
+}
+
+/**
+ * Fetch Support Tickets from Supabase (Admin View)
+ */
+export async function fetchSupportTicketsFromDb(): Promise<SupportTicket[]> {
+  const data = await supabaseFetch('support_tickets', 'select=*&order=created_at.desc');
+  if (Array.isArray(data)) {
+    return data.map((d: any) => ({
+      id: d.id || d.ticket_number,
+      createdAt: d.created_at || d.createdAt,
+      customerName: d.customer_name || 'Anonymous',
+      customerPhone: d.customer_phone || 'N/A',
+      orderId: d.order_id,
+      vendorName: d.vendor_name,
+      governorate: d.governorate,
+      category: d.category_label || d.category,
+      issueType: d.issue_type,
+      subject: d.subject,
+      message: d.description || d.message,
+      status: d.status,
+      proofPhotoUrl: d.proof_photo_url,
+      autoRefundTriggered: Boolean(d.auto_refund_triggered),
+      refundAmount: Number(d.refund_amount_syp || d.refundAmount || 0),
+      adminDecision: d.admin_decision,
+      response: d.response,
+      resolutionSpeedMinutes: Number(d.resolution_speed_minutes || 0)
+    }));
+  }
+  return [];
 }
 
 /**
@@ -293,9 +723,7 @@ export async function fetchRewardRulesFromDb(): Promise<RewardRule[]> {
     return cachedRewardRules;
   }
 
-  const { INITIAL_REWARD_RULES } = await import('../data/mockData');
-  cachedRewardRules = INITIAL_REWARD_RULES;
-  return INITIAL_REWARD_RULES;
+  return [];
 }
 
 /**

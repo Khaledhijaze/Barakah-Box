@@ -92,6 +92,7 @@ export interface OrderItem {
   verifiedAt?: string;
   orderPlacedAt: string;
   paymentMethod: 'محفظة بركة' | 'شام كاش' | 'بطاقة بنكية' | 'دفع عند الاستلام';
+  securityPin?: string;
   financialSplit: {
     totalCustomerPaid: number;
     merchantShare: number;
